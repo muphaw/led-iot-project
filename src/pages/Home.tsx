@@ -85,7 +85,7 @@ const Manual = () => {
           {defaultColors.map((c) => (
             <button
               key={c}
-              onClick={toggleLED}
+              onClick={() => setColor(c)}
               className="w-10 h-10 rounded-full border-2 border-white"
               style={{ backgroundColor: c }}
             />
@@ -95,7 +95,7 @@ const Manual = () => {
         {/* ON / OFF */}
         <div className="flex justify-center gap-4">
           <button
-            onClick={() => setIsOn(!isOn)}
+            onClick={toggleLED}
             className={`px-6 py-2 rounded-xl font-semibold ${
               isOn ? "bg-green-500" : "bg-red-500"
             }`}
