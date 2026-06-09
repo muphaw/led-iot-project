@@ -14,7 +14,7 @@ import {
 import {hexToRgb} from "@/util/hex";
 
 const defaultColors = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FFFFFF"];
-const ESP32_BASE_URL = "http://10.87.162.252";
+const ESP32_BASE_URL = "http://172.21.93.252";
 
 const Manual = () => {
   const [color, setColor] = useState("#FF0000");
@@ -468,6 +468,55 @@ const startSunset = async (seconds: number) => {
             )}
           </AnimatePresence>
         </div>
+
+        {/* ================= ALARM UI (NEW - NO EXISTING UI CHANGED) ================= */}
+<div className="bg-white/5 border border-white/5 rounded-2xl p-4 space-y-4 mt-4">
+
+  <div className="flex items-center justify-between">
+    <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+      <Clock className="w-4 h-4 text-yellow-400" /> Alarm System
+    </div>
+
+    <button
+      onClick={() => setEnableTimer(!enableTimer)}
+      className={`w-10 h-5 rounded-full p-0.5 transition-colors duration-200 ${
+        enableTimer ? "bg-yellow-500" : "bg-white/10"
+      }`}
+    >
+      <div
+        className={`bg-white w-4 h-4 rounded-full shadow transform duration-200 ${
+          enableTimer ? "translate-x-5" : "translate-x-0"
+        }`}
+      />
+    </button>
+  </div>
+
+  {/* Alarm preview */}
+  <div className="text-[11px] text-gray-400 bg-black/20 p-2 rounded-xl border border-white/5">
+    Alarm Time:{" "}
+    <span className="text-white font-mono">
+      {scheduleTime || "Not Set"}
+    </span>
+  </div>
+
+  {/* Test Alarm Trigger */}
+  <div className="flex gap-2">
+    <button
+      onClick={() => startTimer(0)} // instant alarm trigger
+      className="flex-1 py-2 text-xs bg-yellow-500/10 hover:bg-yellow-500/20 rounded-xl"
+    >
+      Trigger Now
+    </button>
+
+    <button
+      onClick={() => startTimer(1)}
+      className="flex-1 py-2 text-xs bg-white/10 hover:bg-white/20 rounded-xl"
+    >
+      Test 1 min
+    </button>
+  </div>
+
+</div>
 
         {/* Global Fallback Overlay Mode Alert Info Banner */}
         <AnimatePresence>
