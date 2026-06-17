@@ -12,9 +12,14 @@ import {
 } from "lucide-react";
 import { hexToRgb } from "@/util/hex";
 import Picker from "react-mobile-picker";
+import AlarmDialog from "@/components/AlarmDialog";
+import type {AlarmAnimation, SavedAlarm, TimerState} from "@/types/data.t";
+import TimerDialog from "@/components/TImerDIalog"; 
+import {formatAlarm} from "@/lib/utils";
+import CircularTimer from "@/components/CircleTimer";
 
 const defaultColors = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FFFFFF"];
-const ESP32_BASE_URL = "http://172.21.93.252";
+const ESP32_BASE_URL = "http://192.168.1.16";
 
 const Manual = () => {
   const [color, setColor] = useState("#FF0000");
@@ -25,17 +30,33 @@ const Manual = () => {
   const [enableTimer, setEnableTimer] = useState(false);
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduledColor, setScheduledColor] = useState("#FF0000");
-  const [currentTime, setCurrentTime] = useState("");
 
-  const [hour, setHour] = useState("08");
-  const [minute, setMinute] = useState("00");
+  const [currentTime, setCurrentTime] = useState("");
+  const [totalDuration, setTotalDuration] = useState<number>(0);
+
   const [period, setPeriod] = useState("AM");
+  const [timerState, setTimerState] = useState<TimerState>("idle");
+
+const [hour, setHour] = useState("01");
+const [minute, setMinute] = useState("00");
+
+const [countdown, setCountdown] = useState<number | null>(null);
+
+const [timerColor, setTimerColor] = useState("#00FF00");
 
   const hours = Array.from({ length: 12 }, (_, i) =>
+    String(i).padStart(2, "0"),
+  );
+
+  const alarmHours = Array.from({ length: 12 }, (_, i) =>
     String(i + 1).padStart(2, "0"),
   );
 
   const minutes = Array.from({ length: 60 }, (_, i) =>
+    String(i).padStart(2, "0"),
+  );
+
+  const seconds = Array.from({ length: 60 }, (_, i) =>
     String(i).padStart(2, "0"),
   );
 
@@ -47,34 +68,66 @@ const Manual = () => {
   const [soundMode] = useState(false);
 
   const [timerHour, setTimerHour] = useState("00");
-  const [timerMinute, setTimerMinute] = useState("05");
+  const [timerMinute, setTimerMinute] = useState("00");
+    const [timerSecond, setTimerSecond] = useState("00");
+const [timerPaused, setTimerPaused] = useState(false);
 
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [timerDialogOpen, setTimerDialogOpen] = useState(false);
+const [timerAnimation, setTimerAnimation] = useState<AlarmAnimation>("fade");
 
-  useEffect(() => {
-    if (!isTimerRunning || countdown === null) return;
+const showIdle = timerState === "idle";
+const showActive = timerState === "running";
+const showDone = timerState === "done";
 
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev === null) return null;
+  // useEffect(() => {
+  //   if (!isTimerRunning || countdown === null) return;
 
-        if (prev <= 1) {
-          clearInterval(interval);
+  //   const interval = setInterval(() => {
+  //     setCountdown((prev) => {
+  //       if (prev === null) return null;
 
-          setIsTimerRunning(false);
+  //       if (prev <= 1) {
+  //         clearInterval(interval);
 
-          startTimer(0);
+  //         setIsTimerRunning(false);
+  //         setTimerState('done')
+  //         setCountdown(0)
+  //         startTimer();
 
-          return 0;
+  //         return 0;
+  //       }
+
+  //       return prev - 1;
+  //     });
+  //   }, 1000);
+
+  //   return () => clearInterval(interval);
+  // }, [isTimerRunning]);
+useEffect(() => {
+  if (timerState !== "running" || countdown === null || timerPaused) return;
+
+  const interval = setInterval(async () => {
+    try {
+      // 🌟 Ping the ESP32 to get the REAL remaining time every second
+      const response = await fetch(`${ESP32_BASE_URL}/timer/status`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && typeof data.remainingSeconds === "number") {
+          setCountdown(data.remainingSeconds);
+          
+          if (data.remainingSeconds <= 0) {
+            setTimerState("done");
+            clearInterval(interval);
+          }
         }
+      }
+    } catch (err) {
+      console.error("Failed to fetch live timer status:", err);
+    }
+  }, 1000);
 
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isTimerRunning]);
+  return () => clearInterval(interval);
+}, [timerState, timerPaused]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -87,20 +140,7 @@ const Manual = () => {
     )}:${String(s).padStart(2, "0")}`;
   };
 
-  const handleStartTimer = async () => {
-    const totalSeconds = Number(timerHour) * 3600 + Number(timerMinute) * 60;
 
-    if (totalSeconds <= 0) return;
-
-    setCountdown(totalSeconds);
-    setIsTimerRunning(true);
-
-    await fetch(
-      `${ESP32_BASE_URL}/timer?minutes=${
-        Number(timerHour) * 60 + Number(timerMinute)
-      }`,
-    );
-  };
 
   // Chronometer Trigger Engine
   useEffect(() => {
@@ -175,34 +215,190 @@ const Manual = () => {
       console.log("Brightness update failed", err);
     }
   };
-
-  // ================= TIMER =================
-  const startTimer = async (minutes: number) => {
-    try {
-      await fetch(`${ESP32_BASE_URL}/timer?minutes=${minutes}`);
-    } catch (err) {
-      console.error("Timer failed", err);
-    }
-  };
-
-  // ================= SUNRISE =================
-  const startSunrise = async (seconds: number) => {
-    try {
-      await fetch(`${ESP32_BASE_URL}/sunrise?seconds=${seconds}`);
-    } catch (err) {
-      console.error("Sunrise failed", err);
-    }
-  };
-
-  // ================= SUNSET =================
-  const startSunset = async (seconds: number) => {
-    try {
-      await fetch(`${ESP32_BASE_URL}/sunset?seconds=${seconds}`);
-    } catch (err) {
-      console.error("Sunset failed", err);
-    }
-  };
   const isLocked = enableTimer;
+
+  const [alarmAnimation, setAlarmAnimation] =
+  useState<AlarmAnimation>("fade");
+const [alarmDialogOpen, setAlarmDialogOpen] = useState(false);
+
+const animationOptions = [
+  {
+    value: "fade",
+    label: "Fade On",
+    icon: "✨",
+    desc: "Smooth brightness increase",
+  },
+  {
+    value: "blink",
+    label: "Blink",
+    icon: "⚡",
+    desc: "Quick flashing effect",
+  },
+  {
+    value: "rainbow",
+    label: "Rainbow",
+    icon: "🌈",
+    desc: "Color cycling effect",
+  },
+  {
+    value: "wave",
+    label: "Wave",
+    icon: "🌊",
+    desc: "Flowing light movement",
+  },
+] ;
+
+const [savedAlarm, setSavedAlarm] = useState<SavedAlarm | null>(null);
+const setAlarm = async () => {
+  const time = formatAlarm(hour, minute, period);
+
+  const r = parseInt(scheduledColor.slice(1, 3), 16);
+  const g = parseInt(scheduledColor.slice(3, 5), 16);
+  const b = parseInt(scheduledColor.slice(5, 7), 16);
+
+  const url =
+    `${ESP32_BASE_URL}/alarm?time=${time}` +
+    `&r=${r}&g=${g}&b=${b}` +
+    (alarmAnimation ? `&animation=${alarmAnimation}` : "");
+
+  // ✅ update UI FIRST (optimistic UI)
+  setSavedAlarm({
+    hour,
+    minute,
+    period,
+    color: scheduledColor,
+    animation: alarmAnimation,
+  });
+
+  setAlarmDialogOpen(false);
+
+  try {
+    await fetch(url);
+  } catch (err) {
+    console.error("Alarm set failed:", err);
+  }
+};
+
+const offAlarm =async ()=>{
+
+     setSavedAlarm(null)
+ try {
+      await fetch(`${ESP32_BASE_URL}/alarm/off`);
+    } catch (err) {
+      console.error("Motion toggle failed:", err);
+    }
+
+}
+const openAlarmDialog = () => {
+  if (savedAlarm) {
+    setHour(savedAlarm.hour);
+    setMinute(savedAlarm.minute);
+    setPeriod(savedAlarm.period);
+    setScheduledColor(savedAlarm.color);
+    setAlarmAnimation(savedAlarm.animation);
+  }
+
+  setAlarmDialogOpen(true);
+};
+const startTimer = async () => {
+
+  const h = Number(timerHour);
+  const m = Number(timerMinute);
+  const s = Number(timerSecond);
+
+  const totalSeconds = h * 3600 + m * 60 + s;
+  if (totalSeconds <= 0) return;
+
+  const r = parseInt(timerColor.slice(1, 3), 16);
+  const g = parseInt(timerColor.slice(3, 5), 16);
+  const b = parseInt(timerColor.slice(5, 7), 16);
+
+  const url =
+    `${ESP32_BASE_URL}/timer?hour=${h}&min=${m}&second=${s}` +
+    `&r=${r}&g=${g}&b=${b}` +
+    (timerAnimation ? `&animation=${timerAnimation}` : "");
+
+  // ✅ OPTIMISTIC UI UPDATE
+  setTimerState("running");
+  setTotalDuration(totalSeconds);
+  setCountdown(totalSeconds);
+
+  setTimerDialogOpen(false);
+
+  try {
+    await fetch(url);
+  } catch (err) {
+    console.error("Timer set failed:", err);
+  }
+};
+
+const pauseTimer = async () => {
+  setTimerPaused(true);
+  
+  try {
+    const response = await fetch(`${ESP32_BASE_URL}/timer/pause`);
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      // If the ESP32 sent back a real remaining time, snap our UI to it!
+      if (data && typeof data.remainingSeconds === "number") {
+        setCountdown(data.remainingSeconds);
+      }
+    }
+  } catch (err) {
+    console.error("Hardware pause sync failed:", err);
+  }
+};
+
+const resumeTimer = async () => {
+  setTimerPaused(false);
+  
+  // 1. Debug log to verify what number React is trying to send
+  console.log("Sending remaining seconds to ESP32:", countdown);
+
+  try {
+    // 2. Make sure the template literal syntax matches exactly with the `countdown` variable
+    await fetch(`${ESP32_BASE_URL}/timer/resume?remaining=${countdown}`);
+  } catch (err) {
+    console.error("Hardware resume sync failed:", err);
+  }
+};
+
+const cancelTimer = async () => {
+
+  setTimerState("idle");
+  setCountdown(null);
+  setTotalDuration(0)
+  setTimerPaused(false);
+   await fetch(`${ESP32_BASE_URL}/timer/cancel`);
+   
+};
+useEffect(() => {
+  if (timerState !== "running" || countdown === null) return;
+
+    if (timerPaused) return;
+  const interval = setInterval(() => {
+    setCountdown((prev) => {
+      if (prev === null) return null;
+
+      if (prev <= 1) {
+        clearInterval(interval);
+        setTimerState("done");
+        return 0;
+      }
+
+      return prev - 1;
+    });
+  }, 1000);
+
+  return () => clearInterval(interval);
+}, [timerState,timerPaused]);
+
+const progress =
+  totalDuration > 0 && countdown !== null
+    ? ((totalDuration - countdown) / totalDuration) * 100
+    : 0;
 
   return (
     <div className="min-h-screen w-full bg-[#0b0f19] text-slate-100 flex items-center justify-center p-4 md:p-8 relative overflow-hidden">
@@ -344,7 +540,7 @@ const Manual = () => {
             }`}
           >
             <Power className="w-5 h-5" />
-            System Status: {isOn ? "Emitting Power" : "Standby Array Off"}
+            {isOn ? "Turn Off" : "Turn On"}
           </motion.button>
         </div>
         {/* Hardware Intensity Dimmer */}
@@ -369,7 +565,7 @@ const Manual = () => {
           />
         </div>
         {/* Automation Hub Controls Grid Layout */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
           {/* Motion Sensor Toggle Control Card */}
           <div className="bg-white/5 border border-white/5 rounded-2xl p-4 flex flex-col justify-between space-y-4">
             <div className="flex items-center justify-between">
@@ -442,412 +638,147 @@ const Manual = () => {
           </div>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-3xl p-5 space-y-5">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Sleep Timer</h2>
+  
+  <div>
+    <h2 className="text-lg font-semibold text-white">Sleep Timer</h2>
+    <p className="text-xs text-gray-400">Automatically turn off LED</p>
+  </div>
 
-            <p className="text-xs text-gray-400">Automatically turn off LED</p>
-          </div>
+  {showIdle && (
+  <button
+    onClick={() => setTimerDialogOpen(true)}
+    className="px-4 py-2 rounded-xl bg-emerald-500 text-black"
+  >
+    Set Timer
+  </button>
+)}
 
-          {isTimerRunning ? (
-            <div className="text-center py-4">
-              <div className="text-5xl font-light text-white">
-                {formatTime(countdown ?? 0)}
-              </div>
 
-              <p className="text-xs text-emerald-400 mt-2">Countdown Active</p>
+       <CircularTimer
+        showActive={showActive}
+        showDone={showDone}
+        timerColor={timerColor}
+        progress={progress}
+        countdown={countdown}
+        formatTime={formatTime}
+        timerState={timerState}
+        timerPaused={timerPaused}
+        pauseTimer={pauseTimer}
+        resumeTimer={resumeTimer}
+        cancelTimer={cancelTimer}
+      />
 
-              <button
-                onClick={() => {
-                  setIsTimerRunning(false);
-                  setCountdown(null);
-                }}
-                className="mt-4 px-5 py-2 rounded-xl bg-red-500/10 text-red-400"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="relative rounded-2xl bg-black/20 overflow-hidden">
-                <div className="absolute inset-x-4 top-1/2 h-14 -translate-y-1/2 rounded-xl bg-white/10 border border-white/10 pointer-events-none z-10" />
 
-                <Picker
-                  value={{
-                    hour: timerHour,
-                    minute: timerMinute,
-                  }}
-                  onChange={(value) => {
-                    setTimerHour(value.hour);
-                    setTimerMinute(value.minute);
-                  }}
-                  height={180}
-                  itemHeight={52}
-                >
-                  <Picker.Column name="hour">
-                    {Array.from({ length: 24 }, (_, i) =>
-                      String(i).padStart(2, "0"),
-                    ).map((h) => (
-                      <Picker.Item key={h} value={h}>
-                        {({ selected }) => (
-                          <div
-                            className={
-                              selected
-                                ? "text-3xl font-semibold text-white"
-                                : "text-lg text-gray-600"
-                            }
-                          >
-                            {h}
-                          </div>
-                        )}
-                      </Picker.Item>
-                    ))}
-                  </Picker.Column>
+  {/* ================= DIALOG ================= */}
+  <TimerDialog
+    open={timerDialogOpen}
+    onOpenChange={setTimerDialogOpen}
 
-                  <Picker.Column name="minute">
-                    {Array.from({ length: 60 }, (_, i) =>
-                      String(i).padStart(2, "0"),
-                    ).map((m) => (
-                      <Picker.Item key={m} value={m}>
-                        {({ selected }) => (
-                          <div
-                            className={
-                              selected
-                                ? "text-3xl font-semibold text-white"
-                                : "text-lg text-gray-600"
-                            }
-                          >
-                            {m}
-                          </div>
-                        )}
-                      </Picker.Item>
-                    ))}
-                  </Picker.Column>
-                </Picker>
-              </div>
+    timerHour={timerHour}
+    timerMinute={timerMinute}
+    timerSecond={timerSecond}
+    timerColor={timerColor}
+    timerAnimation={timerAnimation}
 
-              <button
-                onClick={handleStartTimer}
-                className="w-full py-3 rounded-2xl bg-emerald-500 text-black font-semibold"
-              >
-                Start Timer
-              </button>
-            </>
-          )}
+    setTimerHour={setTimerHour}
+    setTimerMinute={setTimerMinute}
+    setTimerSecond={setTimerSecond}
+    setTimerColor={setTimerColor}
+    setTimerAnimation={setTimerAnimation}
+
+    onStart={() => {
+      startTimer();
+      setTimerDialogOpen(false);
+    }}
+
+    hours={hours}
+    minutes={minutes}
+    seconds={seconds}
+    animationOptions={animationOptions}
+  />
+
+</div>
+
+
+
+       {savedAlarm ? (
+  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+    
+    <div className="flex items-center justify-between">
+      <div>
+        <div className="text-sm font-semibold text-white">
+          Alarm Set
         </div>
-        {/* <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-3 mt-4">
-          <h2 className="text-xs font-bold text-gray-400 uppercase">
-            Sunrise Fade ON
-          </h2>
-
-          <div className="flex gap-2">
-            {[10, 20, 30].map((s) => (
-              <button
-                key={s}
-                onClick={() => startSunrise(s)}
-                className="flex-1 py-2 text-xs bg-amber-500/10 hover:bg-amber-500/20 rounded-xl"
-              >
-                {s}s
-              </button>
-            ))}
-          </div>
-        </div> */}
-        {/* <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-3 mt-4">
-          <h2 className="text-xs font-bold text-gray-400 uppercase">
-            Sunset Fade OFF
-          </h2>
-
-          <div className="flex gap-2">
-            {[10, 20, 30].map((s) => (
-              <button
-                key={s}
-                onClick={() => startSunset(s)}
-                className="flex-1 py-2 text-xs bg-purple-500/10 hover:bg-purple-500/20 rounded-xl"
-              >
-                {s}s
-              </button>
-            ))}
-          </div>
-        </div> */}
-        {/* Active Chronometer Cron Automation Row */}
-        {/* <div
-          className={`bg-white/5 border border-white/5 rounded-2xl p-4 space-y-4 transition-opacity ${soundMode ? "opacity-40 pointer-events-none" : ""}`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
-              <Clock className="w-4 h-4 text-emerald-400" /> Chronometer
-              Scheduling
-            </div>
-            <button
-              disabled={soundMode}
-              onClick={() => setEnableTimer(!enableTimer)}
-              className={`w-10 h-5 rounded-full p-0.5 transition-colors duration-200 ${enableTimer ? "bg-emerald-500" : "bg-white/10"}`}
-            >
-              <div
-                className={`bg-white w-4 h-4 rounded-full shadow transform duration-200 ${enableTimer ? "translate-x-5" : "translate-x-0"}`}
-              />
-            </button>
-          </div>
-
-          <AnimatePresence>
-            {enableTimer && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="space-y-3 pt-2 overflow-hidden border-t border-white/5"
-              >
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase text-gray-400 font-bold tracking-wider">
-                      Trigger Time
-                    </label>
-                    <input
-                      type="time"
-                      value={scheduleTime}
-                      onChange={(e) => setScheduleTime(e.target.value)}
-                      className="w-full p-2 text-xs rounded-xl bg-neutral-950 border border-white/10 text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase text-gray-400 font-bold tracking-wider">
-                      Target Tint
-                    </label>
-                    <div className="relative h-8 rounded-xl border border-white/10 overflow-hidden flex items-center justify-center bg-neutral-950">
-                      <input
-                        type="color"
-                        value={scheduledColor}
-                        onChange={(e) => setScheduledColor(e.target.value)}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                      <div
-                        className="w-4 h-4 rounded-full border border-white/20"
-                        style={{ backgroundColor: scheduledColor }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {currentTime && (
-                  <div className="flex items-center gap-2 text-[10px] font-mono text-gray-400 bg-black/20 p-2 rounded-xl border border-white/5">
-                    <Activity className="w-3 h-3 text-cyan-400 animate-pulse" />
-                    <span>
-                      Cron Tracker Active Loop:{" "}
-                      <span className="text-white">{currentTime}</span>
-                    </span>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div> */}
-        {/* ================= ALARM UI (NEW - NO EXISTING UI CHANGED) ================= */}
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 mt-4">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Alarm</h2>
-
-              <p className="text-xs text-gray-400">
-                Schedule automatic light activation
-              </p>
-            </div>
-
-            <button
-              onClick={() => setEnableTimer(!enableTimer)}
-              className={`w-12 h-6 rounded-full p-0.5 transition ${
-                enableTimer ? "bg-emerald-500 " : "bg-white/10"
-              }`}
-            >
-              <div
-                className={`w-5 h-5 rounded-full bg-white transition ${
-                  enableTimer ? "translate-x-6" : ""
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Time Preview */}
-          <div className="text-center mb-6">
-            <div className="flex items-end justify-center gap-2">
-              <span className="text-6xl font-light text-white">{hour}</span>
-
-              <span className="text-5xl font-light text-white/50 pb-1">:</span>
-
-              <span className="text-6xl font-light text-white">{minute}</span>
-
-              <span className="ml-2 text-lg font-medium text-emerald-400">
-                {period}
-              </span>
-            </div>
-
-            <p className="mt-2 text-xs text-gray-400">Alarm Time</p>
-          </div>
-
-          {/* Wheel Picker */}
-          <div
-            className={`relative rounded-2xl bg-black/30 border border-white/5 overflow-hidden ${
-              isLocked ? "opacity-50 pointer-events-none" : ""
-            }`}
-          >
-            {/* Selected Row */}
-            <div className="absolute inset-x-6 top-1/2 h-14 -translate-y-1/2 rounded-xl bg-white/10 border border-white/10  pointer-events-none z-10" />{" "}
-            {/* Fade Top */}
-            <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-[#0b0f19] to-transparent pointer-events-none z-20" />
-            {/* Fade Bottom */}
-            <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#0b0f19] to-transparent pointer-events-none z-20" />
-            <Picker
-              value={{
-                hour,
-                minute,
-                period,
-              }}
-              onChange={(value) => {
-                setHour(value.hour);
-                setMinute(value.minute);
-                setPeriod(value.period);
-
-                const hour24 =
-                  value.period === "PM"
-                    ? (Number(value.hour) % 12) + 12
-                    : Number(value.hour) % 12;
-
-                setScheduleTime(
-                  `${String(hour24).padStart(2, "0")}:${value.minute}`,
-                );
-              }}
-              height={220}
-              itemHeight={52}
-            >
-              <Picker.Column name="hour">
-                {hours.map((h) => (
-                  <Picker.Item key={h} value={h}>
-                    {({ selected }) => (
-                      <div
-                        className={`text-center transition-all duration-200 ${
-                          selected
-                            ? "text-3xl font-semibold text-white"
-                            : "text-lg text-gray-600"
-                        }`}
-                      >
-                        {h}
-                      </div>
-                    )}
-                  </Picker.Item>
-                ))}
-              </Picker.Column>
-
-              <Picker.Column name="minute">
-                {minutes.map((m) => (
-                  <Picker.Item key={m} value={m}>
-                    {({ selected }) => (
-                      <div
-                        className={`text-center transition-all duration-200 ${
-                          selected
-                            ? "text-3xl font-semibold text-white"
-                            : "text-lg text-gray-600"
-                        }`}
-                      >
-                        {m}
-                      </div>
-                    )}
-                  </Picker.Item>
-                ))}
-              </Picker.Column>
-
-              <Picker.Column name="period">
-                {["AM", "PM"].map((p) => (
-                  <Picker.Item key={p} value={p}>
-                    {({ selected }) => (
-                      <div
-                        className={`text-center transition-all duration-200 ${
-                          selected
-                            ? "text-xl font-semibold text-emerald-400"
-                            : "text-base text-gray-600"
-                        }`}
-                      >
-                        {p}
-                      </div>
-                    )}
-                  </Picker.Item>
-                ))}
-              </Picker.Column>
-            </Picker>
-          </div>
-
-          {/* Color Section */}
-          <div className="mt-6">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs uppercase tracking-wider text-gray-400">
-                Alarm Color
-              </span>
-
-              <span className="font-mono text-xs text-white">
-                {scheduledColor.toUpperCase()}
-              </span>
-            </div>
-
-            <div className="flex justify-center gap-4 mb-4">
-              {defaultColors.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setScheduledColor(c)}
-                  className={`w-11 h-11 rounded-full transition-all duration-200 ${
-                    isLocked
-                      ? "opacity-40 cursor-not-allowed"
-                      : scheduledColor === c
-                        ? "scale-110 ring-2 ring-white"
-                        : "opacity-70 hover:opacity-100"
-                  }`}
-                  style={{
-                    backgroundColor: c,
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* Any Color Picker */}
-            <div className="relative">
-              <input
-                type="color"
-                value={scheduledColor}
-                disabled={isLocked}
-                onChange={(e) => !isLocked && setScheduledColor(e.target.value)}
-                className="absolute inset-0 w-full h-12 opacity-0 cursor-pointer z-10"
-              />
-
-              <div
-                className={`h-12 rounded-xl bg-black/20 border border-white/10 flex items-center justify-center gap-3 transition ${
-                  isLocked
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:bg-black/30"
-                }`}
-              >
-                <div
-                  className="w-5 h-5 rounded-full border border-white/20"
-                  style={{
-                    backgroundColor: scheduledColor,
-                    boxShadow: `0 0 12px ${scheduledColor}`,
-                  }}
-                />
-                <span className="text-sm text-white">Pick Any Color</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Status */}
-          <div className="mt-5 flex items-center justify-center gap-2 text-sm text-gray-400">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{
-                backgroundColor: scheduledColor,
-              }}
-            />
-
-            <span>
-              Turns on at {hour}:{minute} {period}
-            </span>
-          </div>
+        <div className="text-xs text-gray-400">
+          {savedAlarm.hour}:{savedAlarm.minute} {savedAlarm.period}
         </div>
+      </div>
+
+      {/* color preview dot */}
+      <div
+        className="w-5 h-5 rounded-full"
+        style={{ backgroundColor: savedAlarm.color }}
+      />
+    </div>
+
+    {/* animation preview */}
+    <div className="text-xs text-gray-400">
+      Animation: <span className="text-white">{savedAlarm.animation}</span>
+    </div>
+
+    {/* actions */}
+    <div className="flex gap-2">
+      <button
+        onClick={() => setAlarmDialogOpen(true)}
+        className="flex-1 py-2 rounded-xl bg-white/10"
+      >
+        Edit
+      </button>
+
+      <button
+        onClick={offAlarm}
+        className="flex-1 py-2 rounded-xl bg-red-500/10 text-red-400"
+      >
+        Remove
+      </button>
+    </div>
+  </div>
+) : (
+
+  <button
+  onClick={openAlarmDialog}
+  className="h-12 px-5 rounded-2xl bg-emerald-500 text-white"
+>
+  {savedAlarm ? "Edit Alarm" : "Set Alarm"}
+</button>
+)}
+<AlarmDialog
+  open={alarmDialogOpen}
+  onOpenChange={setAlarmDialogOpen}
+  isLocked={isLocked}
+
+  hour={hour}
+  minute={minute}
+  period={period}
+  scheduledColor={scheduledColor}
+  alarmAnimation={alarmAnimation}
+
+  setHour={setHour}
+  setMinute={setMinute}
+  setPeriod={setPeriod}
+  setScheduledColor={setScheduledColor}
+  setAlarmAnimation={setAlarmAnimation}
+
+  // enableTimer={enableTimer}
+  // setEnableTimer={setEnableTimer}
+  // setScheduleTime={setScheduleTime}
+
+  saveAlarm={setAlarm}
+  hours={alarmHours}
+  minutes={minutes}
+  defaultColors={defaultColors}
+  animationOptions={animationOptions}
+/>
         {/* Global Fallback Overlay Mode Alert Info Banner */}
         <AnimatePresence>
           {soundMode && (
