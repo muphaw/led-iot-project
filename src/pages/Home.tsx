@@ -19,7 +19,7 @@ import {formatAlarm} from "@/lib/utils";
 import CircularTimer from "@/components/CircleTimer";
 
 const defaultColors = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FFFFFF"];
-const ESP32_BASE_URL = "http://192.168.1.16";
+const ESP32_BASE_URL = "http://192.168.1.2";
 
 const Manual = () => {
   const [color, setColor] = useState("#FF0000");
@@ -79,55 +79,6 @@ const showIdle = timerState === "idle";
 const showActive = timerState === "running";
 const showDone = timerState === "done";
 
-  // useEffect(() => {
-  //   if (!isTimerRunning || countdown === null) return;
-
-  //   const interval = setInterval(() => {
-  //     setCountdown((prev) => {
-  //       if (prev === null) return null;
-
-  //       if (prev <= 1) {
-  //         clearInterval(interval);
-
-  //         setIsTimerRunning(false);
-  //         setTimerState('done')
-  //         setCountdown(0)
-  //         startTimer();
-
-  //         return 0;
-  //       }
-
-  //       return prev - 1;
-  //     });
-  //   }, 1000);
-
-  //   return () => clearInterval(interval);
-  // }, [isTimerRunning]);
-useEffect(() => {
-  if (timerState !== "running" || countdown === null || timerPaused) return;
-
-  const interval = setInterval(async () => {
-    try {
-      // 🌟 Ping the ESP32 to get the REAL remaining time every second
-      const response = await fetch(`${ESP32_BASE_URL}/timer/status`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data && typeof data.remainingSeconds === "number") {
-          setCountdown(data.remainingSeconds);
-          
-          if (data.remainingSeconds <= 0) {
-            setTimerState("done");
-            clearInterval(interval);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch live timer status:", err);
-    }
-  }, 1000);
-
-  return () => clearInterval(interval);
-}, [timerState, timerPaused]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
