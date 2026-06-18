@@ -14,22 +14,23 @@ export default function CircularTimer({
   resumeTimer,
   cancelTimer,
 }: any) {
-  const radius = 70;
+  // 🔥 BIGGER SIZE CONFIG
+  const size = 205; // was 208 (w-52), now bigger
+  const center = size / 2;
+  const radius = 90; // bigger ring
+
   const circumference = 2 * Math.PI * radius;
 
-  // raw progress motion value (0 → 100)
   const progressValue = useMotionValue(progress);
 
-  // smooth spring animation
   const smoothProgress = useSpring(progressValue, {
     stiffness: 120,
     damping: 25,
   });
 
-  // convert progress → stroke offset
   const strokeOffset = useTransform(
     smoothProgress,
-    (p : any) => circumference * (1 - p / 100)
+    (p: any) => circumference * (1 - p / 100),
   );
 
   useEffect(() => {
@@ -38,25 +39,49 @@ export default function CircularTimer({
 
   return (
     <>
-      {(showActive || showDone) && (
-        <div className="flex flex-col items-center">
-          <div className="relative w-40 h-40">
+      <div className="p-6 rounded-3xl bg-black/30 border border-white/10 shadow-xl space-y-6 transition-all">
+        {/* TOP */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-2.5 h-2.5 rounded-full animate-pulse"
+              style={{ backgroundColor: timerColor }}
+            />
+            <span className="text-xs text-gray-400 uppercase tracking-wider">
+              Timer
+            </span>
+          </div>
+        </div>
 
-            <svg className="w-40 h-40 -rotate-90">
-              {/* background circle */}
+        {/* TIMER CIRCLE */}
+        <div className="flex items-center justify-center">
+          <div className="relative" style={{ width: size, height: size }}>
+            {/* glow */}
+            <div
+              className="absolute inset-0 rounded-full blur-3xl opacity-30"
+              style={{ backgroundColor: timerColor }}
+            />
+
+            {/* SVG RING */}
+            <svg
+              width={size}
+              height={size}
+              className="-rotate-90 relative z-10"
+            >
+              {/* background */}
               <circle
-                cx="80"
-                cy="80"
+                cx={center}
+                cy={center}
                 r={radius}
                 stroke="#1f2937"
                 strokeWidth="10"
                 fill="none"
               />
 
-              {/* animated circle */}
+              {/* progress */}
               <motion.circle
-                cx="80"
-                cy="80"
+                cx={center}
+                cy={center}
                 r={radius}
                 stroke={timerColor}
                 strokeWidth="10"
@@ -65,45 +90,53 @@ export default function CircularTimer({
                 strokeDashoffset={strokeOffset}
                 strokeLinecap="round"
                 style={{
-                  filter: "drop-shadow(0 0 6px rgba(255,255,255,0.15))",
+                  filter: "drop-shadow(0 0 10px rgba(255,255,255,0.2))",
                 }}
               />
             </svg>
 
-            {/* CENTER TEXT */}
-            <div className="absolute inset-0 flex items-center justify-center text-white text-xl font-semibold">
-              {formatTime(countdown ?? 0)}
+            {/* COUNTDOWN */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-20">
+              <div className="text-3xl font-bold text-white tracking-tight">
+                {formatTime(countdown ?? 0)}
+              </div>
+              <div className="text-xs text-gray-400 mt-1">remaining</div>
             </div>
           </div>
-
-          {/* CONTROLS */}
-          <div className="mt-4 flex gap-3">
-            {timerState === "running" &&
-              (!timerPaused ? (
-                <button
-                  onClick={pauseTimer}
-                  className="px-4 py-2 bg-yellow-500/20 text-yellow-400 rounded-xl"
-                >
-                  Pause
-                </button>
-              ) : (
-                <button
-                  onClick={resumeTimer}
-                  className="px-4 py-2 bg-green-500/20 text-green-400 rounded-xl"
-                >
-                  Resume
-                </button>
-              ))}
-
-            <button
-              onClick={cancelTimer}
-              className="px-4 py-2 bg-red-500/20 text-red-400 rounded-xl"
-            >
-              Cancel
-            </button>
-          </div>
         </div>
-      )}
+
+        {/* INFO */}
+        <div className="flex items-center justify-between text-xs text-gray-400">
+          <span>Animation: none</span>
+          <span>{timerPaused ? "Paused" : "Running"}</span>
+        </div>
+
+        {/* ACTIONS */}
+        <div className="flex gap-2 ">
+          {timerState === "running" && !timerPaused ? (
+            <button
+              onClick={pauseTimer}
+              className="flex-1 py-3 rounded-2xl bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition"
+            >
+              Pause
+            </button>
+          ) : (
+            <button
+              onClick={resumeTimer}
+              className="flex-1 py-3 rounded-2xl bg-green-500/10 text-green-400 hover:bg-green-500/20 transition"
+            >
+              Resume
+            </button>
+          )}
+
+          <button
+            onClick={cancelTimer}
+            className="flex-1 py-3 rounded-2xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </>
   );
 }
