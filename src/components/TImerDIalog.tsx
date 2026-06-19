@@ -15,12 +15,15 @@ type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
 
+  isLedOn : boolean;
+
   timerHour: string;
   timerMinute: string;
   timerSecond: string;
 
   timerColor: string;
   timerAnimation: AlarmAnimation;
+  timerLedAction : boolean,
 
   setTimerHour: (v: string) => void;
   setTimerMinute: (v: string) => void;
@@ -28,6 +31,7 @@ type Props = {
 
   setTimerColor: (v: string) => void;
   setTimerAnimation: (v: AlarmAnimation) => void;
+  setTimerLedAction : (v : boolean)=>void;
 
   onStart: () => void;
 
@@ -42,12 +46,15 @@ export default function TimerDialog({
   open,
   onOpenChange,
 
+  isLedOn,
+
   timerHour,
   timerMinute,
   timerSecond,
 
   timerColor,
   timerAnimation,
+  timerLedAction,
 
   setTimerHour,
   setTimerMinute,
@@ -55,6 +62,7 @@ export default function TimerDialog({
 
   setTimerColor,
   setTimerAnimation,
+  setTimerLedAction,
 
   onStart,
 
@@ -66,6 +74,9 @@ export default function TimerDialog({
 }: Props) {
   const isMobile =
     typeof window !== "undefined" && window.innerWidth < 640;
+
+       const showColorAndAnimation = !(isLedOn && !timerLedAction);
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -189,7 +200,30 @@ export default function TimerDialog({
           </Picker>
         </div>
 
-        {/* ================= COLOR ================= */}
+                  {isLedOn && (
+  <>
+    {/* TOGGLE */}
+    <div className="">
+      <span>To make led:</span>
+
+       <button
+  onClick={() => setTimerLedAction(!timerLedAction)}
+  className={`px-4 py-2 rounded-xl ${
+    timerLedAction ? "bg-green-500" : "bg-white/10"
+  }`}
+>
+  {timerLedAction ? "ON" : "OFF"}
+</button>
+    </div>
+
+    
+  </>
+)}
+
+{
+  showColorAndAnimation && (
+    <>
+    {/* ================= COLOR ================= */}
         <div className="mt-2 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-xs uppercase text-gray-400">
@@ -200,50 +234,53 @@ export default function TimerDialog({
               {timerColor}
             </span>
           </div>
-
-          {/* COLOR PICKER */}
-          <label className="relative block w-full h-9 sm:h-10 rounded-xl border border-white/10 bg-black/20 overflow-hidden">
-            <input
-              type="color"
-              value={timerColor}
-              onChange={(e) => setTimerColor(e.target.value)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-
-            <div className="absolute inset-0 flex items-center justify-center gap-2">
-              <div
-                className="w-6 h-5 rounded-full border border-white/30"
-                style={{ backgroundColor: timerColor }}
-              />
-              <span className="text-xs sm:text-sm text-white">
-                Pick Color
-              </span>
-            </div>
-          </label>
-
-          {/* PRESETS */}
-          <div className="flex gap-2 flex-wrap justify-center sm:justify-start">
-            {[
-              "#ff0000",
-              "#ffff00",
-              "#00ff00",
-              "#0000ff",
-              "#ffffff",
-            ].map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setTimerColor(c)}
-                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full border transition-all ${
-                  timerColor === c
-                    ? "ring-2 ring-white scale-110"
-                    : "border-white/10"
-                }`}
-                style={{ backgroundColor: c }}
-              />
-            ))}
           </div>
-        </div>
+       <label className="relative flex-1 h-9 sm:h-10 rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+      <input
+        type="color"
+        value={timerColor}
+        onChange={(e) => setTimerColor(e.target.value)}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+      />
+
+      <div className="absolute inset-0 flex items-center justify-center gap-2">
+        <div
+          className="w-5 h-5 rounded-full border border-white/30"
+          style={{ backgroundColor: timerColor }}
+        />
+        <span className="text-xs sm:text-sm text-white">
+          Pick Color
+        </span>
+      </div>
+    </label>
+
+  {/* DEFAULT COLORS */}
+  <div className="flex gap-2 justify-center">
+    {[
+      "#ff0000",
+      "#ffff00",
+      "#00ff00",
+      "#0000ff",
+      "#ffffff",
+    ].map((c) => (
+      <button
+        key={c}
+        type="button"
+        onClick={() => setTimerColor(c)}
+        className={`w-8 h-8 rounded-full border transition-all ${
+          timerColor === c
+            ? "ring-2 ring-white scale-110"
+            : "border-white/10"
+        }`}
+        style={{ backgroundColor: c }}
+      />
+    ))}
+  </div>
+    </>
+  )
+}
+
+        
 
         {/* ================= ANIMATION ================= */}
         <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">

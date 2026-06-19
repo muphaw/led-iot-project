@@ -55,9 +55,10 @@
 // // =======================================================
 // bool timerActive = false;
 // bool timerPaused = false;
-// unsigned long timerDuration = 0;     // Total allocation time in ms
-// unsigned long timerStartTime = 0;    // Absolute tick start
-// unsigned long timerPauseOffset = 0;  // Holds elapsed duration when frozen
+
+// unsigned long timerEndTime = 0;
+// unsigned long pausedRemaining = 0;
+
 // String timerAnimation = "blink";
 
 // // =======================================================
@@ -201,7 +202,7 @@
 
 // // ================= TIME / NTP SYNCHRONIZATION =================
 // void syncTime() {
-//   configTime(0, 0, "pool.ntp.org");
+//   configTime(6 * 3600 + 1800, 0, "pool.ntp.org");
 //   struct tm timeinfo;
 //   if (getLocalTime(&timeinfo)) Serial.println("NTP Time Synced.");
 // }
@@ -235,36 +236,28 @@
 // // ================= LIVE POLLING STATE API (MATCHED TO FRONTEND) =================
 // void handleTimerStatus() {
 //   sendCORSHeaders();
-//   unsigned long remainingMs = 0;
-//   String modeState = "idle"; 
+
+//   long remainingMs = 0;
+//   String state = "idle";
 
 //   if (animationRunning) {
-//     modeState = "done";
-//   } else if (timerActive) {
-//     if (timerPaused) {
-//       modeState = "running"; 
-//       remainingMs = (timerDuration > timerPauseOffset) ? (timerDuration - timerPauseOffset) : 0;
-//     } else {
-//       modeState = "running";
-//       unsigned long elapsed = (millis() - timerStartTime) + timerPauseOffset;
-//       remainingMs = (timerDuration > elapsed) ? (timerDuration - elapsed) : 0;
-//     }
+//     state = "done";
+//   }
+//   else if (timerActive) {
+
+//     state = "running";
+
+//     if (timerPaused)
+//       remainingMs = pausedRemaining;
+//     else
+//       remainingMs = max(0L, (long)(timerEndTime - millis()));
 //   }
 
-//   // ⭐️ ADD 100ms cushion + 900ms ceiling rounding to completely lock the starting second
-//   long remainingSecs = 0;
-//   if (remainingMs > 0) {
-//     remainingSecs = (remainingMs + 100 + 900) / 1000;
-//   }
-  
-//   // Cap it so it never shows a number higher than your total duration allocation
-//   long maxSecs = timerDuration / 1000;
-//   if (remainingSecs > maxSecs) remainingSecs = maxSecs;
-//   if (remainingSecs < 0) remainingSecs = 0;
-  
+//   long remainingSeconds = (remainingMs + 999) / 1000;
+
 //   String json = "{";
-//   json += "\"state\":\"" + modeState + "\",";
-//   json += "\"remainingSeconds\":" + String(remainingSecs) + ",";
+//   json += "\"state\":\"" + state + "\",";
+//   json += "\"remainingSeconds\":" + String(remainingSeconds) + ",";
 //   json += "\"activeAnimation\":\"" + activeAnimationType + "\"";
 //   json += "}";
 
@@ -274,77 +267,77 @@
 // // ================= TIMER CONTROLS (UPDATED TO EXPECT H, M, S) =================
 // void handleStartTimer() {
 //   sendCORSHeaders();
-  
+
 //   long h = server.hasArg("hour") ? server.arg("hour").toInt() : 0;
 //   long m = server.hasArg("min") ? server.arg("min").toInt() : 0;
 //   long s = server.hasArg("second") ? server.arg("second").toInt() : 0;
-  
-//   long totalSeconds = (h * 3600) + (m * 60) + s;
-  
+
+//   long totalSeconds = h * 3600 + m * 60 + s;
+
 //   if (totalSeconds <= 0) {
-//     server.send(400, "text/plain", "Invalid timing parameters");
+//     server.send(400, "text/plain", "Invalid Timer");
 //     return;
 //   }
-  
-//   if (server.hasArg("r") && server.hasArg("g") && server.hasArg("b")) {
-//     currentR = server.arg("r").toInt();
-//     currentG = server.arg("g").toInt();
-//     currentB = server.arg("b").toInt();
-//   }
-  
-//   timerAnimation = server.hasArg("animation") ? server.arg("animation") : "fade";
-  
-//   timerDuration = totalSeconds * 1000UL;
-//   timerStartTime = millis();
-//   timerPauseOffset = 0;
+
+//   if (server.hasArg("r")) currentR = server.arg("r").toInt();
+//   if (server.hasArg("g")) currentG = server.arg("g").toInt();
+//   if (server.hasArg("b")) currentB = server.arg("b").toInt();
+
+//   timerAnimation = server.hasArg("animation")
+//                      ? server.arg("animation")
+//                      : "blink";
+
+//   timerEndTime = millis() + (totalSeconds * 1000UL);
+
 //   timerActive = true;
 //   timerPaused = false;
-  
-//   stopTriggerAnimation(); 
-//   server.send(200, "text/plain", "Timer Initiated");
+//   pausedRemaining = 0;
+
+//   stopTriggerAnimation();
+
+//   server.send(200, "text/plain", "Timer Started");
 // }
 
 // void handlePauseTimer() {
 //   sendCORSHeaders();
-//   if (timerActive && !timerPaused) {
-//     // 1. Calculate and accumulation exactly how many milliseconds have passed since starting
-//     unsigned long currentElapsed = millis() - timerStartTime;
-//     timerPauseOffset += currentElapsed; 
-    
-//     timerPaused = true;
-    
-//     // Calculate accurate remaining seconds for the immediate JSON return
-//     long remainingMs = (timerDuration > timerPauseOffset) ? (timerDuration - timerPauseOffset) : 0;
-//     long remainingSecs = (remainingMs + 999) / 1000;
-//     if (remainingSecs < 0) remainingSecs = 0;
 
-//     String json = "{\"remainingSeconds\":" + String(remainingSecs) + "}";
-//     server.send(200, "application/json", json);
-//   } else {
-//     server.send(400, "text/plain", "Timer non-operational");
+//   if (!timerActive || timerPaused) {
+//     server.send(400, "text/plain", "Timer not running");
+//     return;
 //   }
+
+//   pausedRemaining = timerEndTime - millis();
+
+//   timerPaused = true;
+
+//   server.send(200, "text/plain", "Paused");
 // }
 
 // void handleResumeTimer() {
 //   sendCORSHeaders();
-//   if (timerActive && timerPaused) {
-//     // ⭐️ THE FIX: Reset the start anchor to right now. 
-//     // timerPauseOffset accurately holds our accumulated time, so we start a clean new anchor frame.
-//     timerStartTime = millis(); 
-//     timerPaused = false;
-//     server.send(200, "text/plain", "Timer Resumed");
-//   } else {
+
+//   if (!timerActive || !timerPaused) {
 //     server.send(400, "text/plain", "Timer not paused");
+//     return;
 //   }
+
+//   timerEndTime = millis() + pausedRemaining;
+
+//   timerPaused = false;
+
+//   server.send(200, "text/plain", "Resumed");
 // }
 
 // void handleCancelTimer() {
 //   sendCORSHeaders();
+
 //   timerActive = false;
 //   timerPaused = false;
-//   timerPauseOffset = 0;
+//   pausedRemaining = 0;
+
 //   stopTriggerAnimation();
-//   server.send(200, "text/plain", "Timer Canceled");
+
+//   server.send(200, "text/plain", "Canceled");
 // }
 
 // // ================= ALARM CONTROLS =================
@@ -441,9 +434,17 @@
 //   const char* ampm = (timeinfo->tm_hour >= 12) ? "PM" : "AM";
   
 //   // Format matching formatAlarm util output exactly: "HH:MM AM"
-//   sprintf(currentFormatted, "%02d:%02d %s", hr12, timeinfo->tm_min, ampm);
+//   sprintf(currentFormatted, "%02d:%02d", timeinfo->tm_hour, timeinfo->tm_min);
+
+//   Serial.print("Alarm set: ");
+//   Serial.println(alarmTime);
+
+//   Serial.print("Current time: ");
+//   Serial.println(currentFormatted);
   
 //   if (alarmTime == String(currentFormatted)) {
+
+//     Serial.println("ALARM TRIGGERED ✅");
 
 //   alarmTriggered = true;
 
@@ -545,13 +546,15 @@
 
 //   // Active Countdown Verification Engine
 //   if (timerActive && !timerPaused) {
-//     unsigned long elapsed = (millis() - timerStartTime) + timerPauseOffset;
-//     if (elapsed >= timerDuration) {
-//       timerActive = false;
-//       timerPauseOffset = 0;
-//       startTriggerAnimation(timerAnimation);
-//     }
+
+//   if (millis() >= timerEndTime) {
+
+//     timerActive = false;
+//     pausedRemaining = 0;
+
+//     startTriggerAnimation(timerAnimation);
 //   }
+// }
 
 //   // Active Live Alarm Verification Engine
 //   if (alarmEnabled && !alarmTriggered) {
@@ -562,7 +565,7 @@
 //   }
 
 //   // Audio Music Mode Active Sampling Engine
-//   if (musicMode && !animationRunning) {
+//   if (musicMode && !animationRunning && !timerActive) {
 //     readAudioFFT();
 //   }
 // }

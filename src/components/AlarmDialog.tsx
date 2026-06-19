@@ -16,6 +16,7 @@ type Props = {
   onOpenChange: (v: boolean) => void;
 
   isLocked: boolean;
+  isLedOn : boolean;
 
   hour: string;
   minute: string;
@@ -23,6 +24,7 @@ type Props = {
 
   scheduledColor: string;
   alarmAnimation: AlarmAnimation;
+  alarmLedAction : boolean;
 
   setHour: (v: string) => void;
   setMinute: (v: string) => void;
@@ -30,6 +32,7 @@ type Props = {
 
   setScheduledColor: (v: string) => void;
   setAlarmAnimation: (v: AlarmAnimation) => void;
+  setAlarmLedAction : (v : boolean)=> void;
 
   saveAlarm: () => void;
 
@@ -44,12 +47,15 @@ export default function AlarmDialog({
   open,
   onOpenChange,
 
+  isLedOn,
+
   hour,
   minute,
   period,
 
   scheduledColor,
   alarmAnimation,
+  alarmLedAction,
 
   setHour,
   setMinute,
@@ -57,6 +63,7 @@ export default function AlarmDialog({
 
   setScheduledColor,
   setAlarmAnimation,
+  setAlarmLedAction,
 
   saveAlarm,
 
@@ -68,6 +75,8 @@ export default function AlarmDialog({
 }: Props) {
   const isMobile =
     typeof window !== "undefined" && window.innerWidth < 640;
+
+   const showColorAndAnimation = !(isLedOn && !alarmLedAction);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -180,8 +189,30 @@ export default function AlarmDialog({
             </Picker.Column>
           </Picker>
         </div>
+        
+      {isLedOn && (
+  <>
+    {/* TOGGLE */}
+    <div className="">
+      <span>To make led:</span>
 
-        {/* ================= COLOR ================= */}
+      <button
+        onClick={() => setAlarmLedAction(!alarmLedAction)}
+        className={`px-4 py-2 rounded-xl ${
+          alarmLedAction ? "bg-green-500" : "bg-white/10"
+        }`}
+      >
+        {alarmLedAction ? "ON" : "OFF"}
+      </button>
+    </div>
+
+    
+  </>
+)}
+{/* ONLY SHOW WHEN alarmLedAction = true */}
+    {showColorAndAnimation && (
+      <>
+        {/* COLOR */}
         <div className="mt-2 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-xs uppercase text-gray-400">
@@ -212,6 +243,7 @@ export default function AlarmDialog({
             </div>
           </label>
 
+          {/* PRESETS */}
           <div className="flex gap-2 flex-wrap justify-center sm:justify-start">
             {defaultColors.map((c) => (
               <button
@@ -229,7 +261,7 @@ export default function AlarmDialog({
           </div>
         </div>
 
-        {/* ================= ANIMATION ================= */}
+        {/* ANIMATION */}
         <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
           {animationOptions.map((a) => (
             <button
@@ -252,7 +284,8 @@ export default function AlarmDialog({
             </button>
           ))}
         </div>
-
+      </>
+    )}
         {/* ================= FOOTER ================= */}
         <DialogFooter className="mt-2 flex flex-col-reverse sm:flex-row gap-2">
           <DialogClose asChild>

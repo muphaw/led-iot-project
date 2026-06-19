@@ -2,11 +2,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Power,
-  Sun,
   Volume2,
   Activity,
-  Wifi,
-  Sliders,
   Pipette,
 } from "lucide-react";
 import { hexToRgb } from "@/util/hex";
@@ -17,9 +14,6 @@ import { formatAlarm } from "@/lib/utils";
 import CircularTimer from "@/components/CircleTimer";
 import AdvancedLEDBulb from "./animation/Lighting";
 
-import { ref, set } from "firebase/database";
-import { db } from "@/lib/firebase";
-
 const defaultColors = ["#FF0000", "#0000FF", "#FFFFFF"];
 const ESP32_BASE_URL = "http://192.168.1.16";
 
@@ -28,19 +22,19 @@ const Manual = () => {
   const [isOn, setIsOn] = useState(false);
   const [brightness, setBrightness] = useState(50);
 
-  useEffect(() => {
-    console.log("Firebase write running");
-    set(ref(db, "led"), {
-      power: false,
-      brightness: 80,
-      animation: "rainbow",
-      color: {
-        r: 255,
-        g: 0,
-        b: 255,
-      },
-    });
-  }, []);
+  // useEffect(() => {
+  //   console.log("Firebase write running");
+  //   set(ref(db, "led"), {
+  //     power: false,
+  //     brightness: 80,
+  //     animation: "rainbow",
+  //     color: {
+  //       r: 255,
+  //       g: 0,
+  //       b: 255,
+  //     },
+  //   });
+  // }, []);
 
   // Timer / Schedule States
   const [enableTimer, setEnableTimer] = useState(false);
@@ -53,12 +47,13 @@ const Manual = () => {
   const [period, setPeriod] = useState("AM");
   const [timerState, setTimerState] = useState<TimerState>("idle");
 
-  const [hour, setHour] = useState("01");
-  const [minute, setMinute] = useState("00");
+const [hour, setHour] = useState("01");
+const [minute, setMinute] = useState("00");
 
-  const [countdown, setCountdown] = useState<number | null>(null);
+const [countdown, setCountdown] = useState<number | null>(null);
 
-  const [timerColor, setTimerColor] = useState("#00FF00");
+const [timerColor, setTimerColor] = useState("#00FF00");
+const [timerLedAction,setTimerLedAction] = useState(true)
 
   const hours = Array.from({ length: 12 }, (_, i) =>
     String(i).padStart(2, "0"),
@@ -85,65 +80,16 @@ const Manual = () => {
 
   const [timerHour, setTimerHour] = useState("00");
   const [timerMinute, setTimerMinute] = useState("00");
-  const [timerSecond, setTimerSecond] = useState("00");
-  const [timerPaused, setTimerPaused] = useState(false);
+    const [timerSecond, setTimerSecond] = useState("00");
+const [timerPaused, setTimerPaused] = useState(false);
 
   const [timerDialogOpen, setTimerDialogOpen] = useState(false);
-  const [timerAnimation, setTimerAnimation] = useState<AlarmAnimation>("fade");
+const [timerAnimation, setTimerAnimation] = useState<AlarmAnimation>("fade");
 
-  const showIdle = timerState === "idle";
-  const showActive = timerState === "running";
-  const showDone = timerState === "done";
+const showIdle = timerState === "idle";
+const showActive = timerState === "running";
+const showDone = timerState === "done";
 
-  // useEffect(() => {
-  //   if (!isTimerRunning || countdown === null) return;
-
-  //   const interval = setInterval(() => {
-  //     setCountdown((prev) => {
-  //       if (prev === null) return null;
-
-  //       if (prev <= 1) {
-  //         clearInterval(interval);
-
-  //         setIsTimerRunning(false);
-  //         setTimerState('done')
-  //         setCountdown(0)
-  //         startTimer();
-
-  //         return 0;
-  //       }
-
-  //       return prev - 1;
-  //     });
-  //   }, 1000);
-
-  //   return () => clearInterval(interval);
-  // }, [isTimerRunning]);
-  useEffect(() => {
-    if (timerState !== "running" || countdown === null || timerPaused) return;
-
-    const interval = setInterval(async () => {
-      try {
-        // 🌟 Ping the ESP32 to get the REAL remaining time every second
-        const response = await fetch(`${ESP32_BASE_URL}/timer/status`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data && typeof data.remainingSeconds === "number") {
-            setCountdown(data.remainingSeconds);
-
-            if (data.remainingSeconds <= 0) {
-              setTimerState("done");
-              clearInterval(interval);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch live timer status:", err);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [timerState, timerPaused]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -155,6 +101,8 @@ const Manual = () => {
       "0",
     )}:${String(s).padStart(2, "0")}`;
   };
+
+
 
   // Chronometer Trigger Engine
   useEffect(() => {
@@ -231,182 +179,190 @@ const Manual = () => {
   };
   const isLocked = enableTimer;
 
-  const [alarmAnimation, setAlarmAnimation] = useState<AlarmAnimation>("fade");
-  const [alarmDialogOpen, setAlarmDialogOpen] = useState(false);
+  const [alarmAnimation, setAlarmAnimation] =
+  useState<AlarmAnimation>("fade");
+const [alarmDialogOpen, setAlarmDialogOpen] = useState(false);
+const [alarmLedAction,setAlarmLedAction]= useState(true)
 
-  const animationOptions = [
-    {
-      value: "fade",
-      label: "Fade On",
-      icon: "✨",
-      desc: "Smooth brightness increase",
-    },
-    {
-      value: "blink",
-      label: "Blink",
-      icon: "⚡",
-      desc: "Quick flashing effect",
-    },
-    {
-      value: "rainbow",
-      label: "Rainbow",
-      icon: "🌈",
-      desc: "Color cycling effect",
-    },
-    {
-      value: "wave",
-      label: "Wave",
-      icon: "🌊",
-      desc: "Flowing light movement",
-    },
-  ];
+const animationOptions = [
+  {
+    value: "fade",
+    label: "Fade On",
+    icon: "✨",
+    desc: "Smooth brightness increase",
+  },
+  {
+    value: "blink",
+    label: "Blink",
+    icon: "⚡",
+    desc: "Quick flashing effect",
+  },
+  {
+    value: "rainbow",
+    label: "Rainbow",
+    icon: "🌈",
+    desc: "Color cycling effect",
+  },
+  {
+    value: "wave",
+    label: "Wave",
+    icon: "🌊",
+    desc: "Flowing light movement",
+  },
+] ;
 
-  const [savedAlarm, setSavedAlarm] = useState<SavedAlarm | null>(null);
-  const setAlarm = async () => {
-    const time = formatAlarm(hour, minute, period);
+const [savedAlarm, setSavedAlarm] = useState<SavedAlarm | null>(null);
+const setAlarm = async () => {
+  const time = formatAlarm(hour, minute, period);
 
-    const r = parseInt(scheduledColor.slice(1, 3), 16);
-    const g = parseInt(scheduledColor.slice(3, 5), 16);
-    const b = parseInt(scheduledColor.slice(5, 7), 16);
+  const r = parseInt(scheduledColor.slice(1, 3), 16);
+  const g = parseInt(scheduledColor.slice(3, 5), 16);
+  const b = parseInt(scheduledColor.slice(5, 7), 16);
 
-    const url =
-      `${ESP32_BASE_URL}/alarm?time=${time}` +
-      `&r=${r}&g=${g}&b=${b}` +
-      (alarmAnimation ? `&animation=${alarmAnimation}` : "");
+  const url =
+    `${ESP32_BASE_URL}/alarm?time=${time}` +
+    `&r=${r}&g=${g}&b=${b}` +
+    (alarmAnimation ? `&animation=${alarmAnimation}` : "");
 
-    // ✅ update UI FIRST (optimistic UI)
-    setSavedAlarm({
-      hour,
-      minute,
-      period,
-      color: scheduledColor,
-      animation: alarmAnimation,
-    });
+  // ✅ update UI FIRST (optimistic UI)
+  setSavedAlarm({
+    hour,
+    minute,
+    period,
+    color: scheduledColor,
+    animation: alarmAnimation,
+  });
 
-    setAlarmDialogOpen(false);
+  setAlarmDialogOpen(false);
 
-    try {
-      await fetch(url);
-    } catch (err) {
-      console.error("Alarm set failed:", err);
-    }
-  };
+  try {
+    await fetch(url);
+  } catch (err) {
+    console.error("Alarm set failed:", err);
+  }
+};
 
-  const offAlarm = async () => {
-    setSavedAlarm(null);
-    try {
+const offAlarm =async ()=>{
+
+     setSavedAlarm(null)
+ try {
       await fetch(`${ESP32_BASE_URL}/alarm/off`);
     } catch (err) {
       console.error("Motion toggle failed:", err);
     }
-  };
-  const openAlarmDialog = () => {
-    if (savedAlarm) {
-      setHour(savedAlarm.hour);
-      setMinute(savedAlarm.minute);
-      setPeriod(savedAlarm.period);
-      setScheduledColor(savedAlarm.color);
-      setAlarmAnimation(savedAlarm.animation);
-    }
 
-    setAlarmDialogOpen(true);
-  };
-  const startTimer = async () => {
-    const h = Number(timerHour);
-    const m = Number(timerMinute);
-    const s = Number(timerSecond);
+}
+const openAlarmDialog = () => {
+  if (savedAlarm) {
+    setHour(savedAlarm.hour);
+    setMinute(savedAlarm.minute);
+    setPeriod(savedAlarm.period);
+    setScheduledColor(savedAlarm.color);
+    setAlarmAnimation(savedAlarm.animation);
+  }
 
-    const totalSeconds = h * 3600 + m * 60 + s;
-    if (totalSeconds <= 0) return;
+  setAlarmDialogOpen(true);
+};
+const startTimer = async () => {
 
-    const r = parseInt(timerColor.slice(1, 3), 16);
-    const g = parseInt(timerColor.slice(3, 5), 16);
-    const b = parseInt(timerColor.slice(5, 7), 16);
+  const h = Number(timerHour);
+  const m = Number(timerMinute);
+  const s = Number(timerSecond);
 
-    const url =
-      `${ESP32_BASE_URL}/timer?hour=${h}&min=${m}&second=${s}` +
-      `&r=${r}&g=${g}&b=${b}` +
-      (timerAnimation ? `&animation=${timerAnimation}` : "");
+  const totalSeconds = h * 3600 + m * 60 + s;
+  if (totalSeconds <= 0) return;
 
-    // ✅ OPTIMISTIC UI UPDATE
-    setTimerState("running");
-    setTotalDuration(totalSeconds);
-    setCountdown(totalSeconds);
+  const r = parseInt(timerColor.slice(1, 3), 16);
+  const g = parseInt(timerColor.slice(3, 5), 16);
+  const b = parseInt(timerColor.slice(5, 7), 16);
 
-    setTimerDialogOpen(false);
+  const url =
+  `${ESP32_BASE_URL}/timer?hour=${h}&min=${m}&second=${s}` +
+  `&led=${timerLedAction ? 1 : 0}` +
+  `&r=${r}&g=${g}&b=${b}` +
+  (timerAnimation ? `&animation=${timerAnimation}` : "");
 
-    try {
-      await fetch(url);
-    } catch (err) {
-      console.error("Timer set failed:", err);
-    }
-  };
+  // ✅ OPTIMISTIC UI UPDATE
+  setTimerState("running");
+  setTotalDuration(totalSeconds);
+  setCountdown(totalSeconds);
 
-  const pauseTimer = async () => {
-    setTimerPaused(true);
+  setTimerDialogOpen(false);
 
-    try {
-      const response = await fetch(`${ESP32_BASE_URL}/timer/pause`);
+  try {
+    await fetch(url);
+  } catch (err) {
+    console.error("Timer set failed:", err);
+  }
+};
 
-      if (response.ok) {
-        const data = await response.json();
-
-        // If the ESP32 sent back a real remaining time, snap our UI to it!
-        if (data && typeof data.remainingSeconds === "number") {
-          setCountdown(data.remainingSeconds);
-        }
+const pauseTimer = async () => {
+  setTimerPaused(true);
+  
+  try {
+    const response = await fetch(`${ESP32_BASE_URL}/timer/pause`);
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      // If the ESP32 sent back a real remaining time, snap our UI to it!
+      if (data && typeof data.remainingSeconds === "number") {
+        setCountdown(data.remainingSeconds);
       }
-    } catch (err) {
-      console.error("Hardware pause sync failed:", err);
     }
-  };
+  } catch (err) {
+    console.error("Hardware pause sync failed:", err);
+  }
+};
 
-  const resumeTimer = async () => {
-    setTimerPaused(false);
+const resumeTimer = async () => {
+  setTimerPaused(false);
+  
+  // 1. Debug log to verify what number React is trying to send
+  console.log("Sending remaining seconds to ESP32:", countdown);
 
-    // 1. Debug log to verify what number React is trying to send
-    console.log("Sending remaining seconds to ESP32:", countdown);
+  try {
+    // 2. Make sure the template literal syntax matches exactly with the `countdown` variable
+    await fetch(`${ESP32_BASE_URL}/timer/resume?remaining=${countdown}`);
+  } catch (err) {
+    console.error("Hardware resume sync failed:", err);
+  }
+};
 
-    try {
-      // 2. Make sure the template literal syntax matches exactly with the `countdown` variable
-      await fetch(`${ESP32_BASE_URL}/timer/resume?remaining=${countdown}`);
-    } catch (err) {
-      console.error("Hardware resume sync failed:", err);
-    }
-  };
+const cancelTimer = async () => {
 
-  const cancelTimer = async () => {
-    setTimerState("idle");
-    setCountdown(null);
-    setTotalDuration(0);
-    setTimerPaused(false);
-    await fetch(`${ESP32_BASE_URL}/timer/cancel`);
-  };
-  useEffect(() => {
-    if (timerState !== "running" || countdown === null) return;
+  setTimerState("idle");
+  setCountdown(null);
+  setTotalDuration(0)
+  setTimerPaused(false);
+   await fetch(`${ESP32_BASE_URL}/timer/cancel`);
+   
+};
+useEffect(() => {
+  if (timerState !== "running" || countdown === null) return;
 
     if (timerPaused) return;
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev === null) return null;
+  const interval = setInterval(() => {
+    setCountdown((prev) => {
+      if (prev === null) return null;
 
-        if (prev <= 1) {
-          clearInterval(interval);
-          setTimerState("done");
-          return 0;
-        }
+      if (prev <= 1) {
+        clearInterval(interval);
+        setTimerState("done");
+        return 0;
+      }
 
-        return prev - 1;
-      });
-    }, 1000);
+      return prev - 1;
+    });
+  }, 1000);
 
-    return () => clearInterval(interval);
-  }, [timerState, timerPaused]);
+  return () => clearInterval(interval);
+}, [timerState,timerPaused]);
 
-  const progress =
-    totalDuration > 0 && countdown !== null
-      ? ((totalDuration - countdown) / totalDuration) * 100
-      : 0;
+const progress =
+  totalDuration > 0 && countdown !== null
+    ? ((totalDuration - countdown) / totalDuration) * 100
+    : 0;
 
   const isTimerActive = showActive || showDone;
   const isAlarmActive = !!savedAlarm;
@@ -415,9 +371,9 @@ const Manual = () => {
   const showButtons = !isTimerActive && !isAlarmActive;
 
   return (
-    <div className=" w-full bg-[#0b0f19] text-slate-100 flex items-center justify-center ">
+    <div className=" w-full  bg-[#0b0f19] text-slate-100 flex items-center justify-center ">
       {/* Main Glassmorphic Panel Layout Container */}
-      <div className="w-full max-w-lg bg-white/5 backdrop-blur-xl border border-white/10  p-5 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.4)] space-y-4 ">
+      <div className="w-full min-h-screen max-w-lg bg-white/5 backdrop-blur-xl border border-white/10  p-5 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.4)] space-y-4 ">
         {savedAlarm ? (
           <div className="p-6 rounded-3xl bg-black/30 border border-white/10 shadow-xl space-y-6 transition-all">
             {/* TOP: Time */}
@@ -708,16 +664,19 @@ const Manual = () => {
           <TimerDialog
             open={timerDialogOpen}
             onOpenChange={setTimerDialogOpen}
+            isLedOn={isOn}
             timerHour={timerHour}
             timerMinute={timerMinute}
             timerSecond={timerSecond}
             timerColor={timerColor}
             timerAnimation={timerAnimation}
+            timerLedAction={timerLedAction}
             setTimerHour={setTimerHour}
             setTimerMinute={setTimerMinute}
             setTimerSecond={setTimerSecond}
             setTimerColor={setTimerColor}
             setTimerAnimation={setTimerAnimation}
+            setTimerLedAction={setTimerLedAction}
             onStart={() => {
               startTimer();
               setTimerDialogOpen(false);
@@ -732,17 +691,20 @@ const Manual = () => {
         <AlarmDialog
           open={alarmDialogOpen}
           onOpenChange={setAlarmDialogOpen}
+          isLedOn={isOn}
           isLocked={isLocked}
           hour={hour}
           minute={minute}
           period={period}
           scheduledColor={scheduledColor}
           alarmAnimation={alarmAnimation}
+          alarmLedAction={alarmLedAction}
           setHour={setHour}
           setMinute={setMinute}
           setPeriod={setPeriod}
           setScheduledColor={setScheduledColor}
           setAlarmAnimation={setAlarmAnimation}
+          setAlarmLedAction={setAlarmLedAction}
           saveAlarm={setAlarm}
           hours={alarmHours}
           minutes={minutes}
