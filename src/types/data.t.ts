@@ -1,11 +1,6 @@
-export type AlarmAnimation =
-  | "fade"
-  | "blink"
-  | "pulse"
-  | "rainbow"
-  | "wave";
+export type AlarmAnimation = "fade" | "blink" | "pulse" | "rainbow" | "wave";
 
-export  type SavedAlarm = {
+export type SavedAlarm = {
   hour: string;
   minute: string;
   period: string;
@@ -16,10 +11,10 @@ export  type SavedAlarm = {
 export type TimerState = "idle" | "running" | "done";
 
 export type SaveTimer = {
-    total : number,
-    color : string,
-    animation : AlarmAnimation
-}
+  total: number;
+  color: string;
+  animation: AlarmAnimation;
+};
 
 export type AnimationOption = {
   value: AlarmAnimation;

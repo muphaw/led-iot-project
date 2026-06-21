@@ -9,13 +9,13 @@ import {
 } from "@/components/ui/dialog";
 
 import Picker from "react-mobile-picker";
-import type { AlarmAnimation } from "@/types/data.t";
+import type { AlarmAnimation, AnimationOption } from "@/types/data.t";
 
 type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
 
-  isLedOn : boolean;
+  isLedOn: boolean;
 
   timerHour: string;
   timerMinute: string;
@@ -23,7 +23,7 @@ type Props = {
 
   timerColor: string;
   timerAnimation: AlarmAnimation;
-  timerLedAction : boolean,
+  timerLedAction: boolean;
 
   setTimerHour: (v: string) => void;
   setTimerMinute: (v: string) => void;
@@ -31,7 +31,7 @@ type Props = {
 
   setTimerColor: (v: string) => void;
   setTimerAnimation: (v: AlarmAnimation) => void;
-  setTimerLedAction : (v : boolean)=>void;
+  setTimerLedAction: (v: boolean) => void;
 
   onStart: () => void;
 
@@ -39,7 +39,7 @@ type Props = {
   minutes: string[];
   seconds: string[];
 
-  animationOptions: any[];
+  animationOptions: AnimationOption[];
 };
 
 export default function TimerDialog({
@@ -72,11 +72,9 @@ export default function TimerDialog({
 
   animationOptions,
 }: Props) {
-  const isMobile =
-    typeof window !== "undefined" && window.innerWidth < 640;
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
 
-       const showColorAndAnimation = !(isLedOn && !timerLedAction);
-
+  const showColorAndAnimation = !(isLedOn && !timerLedAction);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -109,21 +107,15 @@ export default function TimerDialog({
           {/* Labels */}
           <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 z-10 flex">
             <div className="w-1/3 flex justify-end pr-4">
-              <span className="text-[10px] sm:text-sm text-white/60">
-                hr
-              </span>
+              <span className="text-[10px] sm:text-sm text-white/60">hr</span>
             </div>
 
             <div className="w-1/3 flex justify-end pr-4">
-              <span className="text-[10px] sm:text-sm text-white/60">
-                min
-              </span>
+              <span className="text-[10px] sm:text-sm text-white/60">min</span>
             </div>
 
             <div className="w-1/3 flex justify-end pr-4">
-              <span className="text-[10px] sm:text-sm text-white/60">
-                sec
-              </span>
+              <span className="text-[10px] sm:text-sm text-white/60">sec</span>
             </div>
           </div>
 
@@ -200,118 +192,106 @@ export default function TimerDialog({
           </Picker>
         </div>
 
-                  {isLedOn && (
-  <>
-    {/* TOGGLE */}
-    <div className="">
-      <span>To make led:</span>
+        {isLedOn && (
+          <>
+            {/* TOGGLE */}
+            <div className="">
+              <span>To make led:</span>
 
-       <button
-  onClick={() => setTimerLedAction(!timerLedAction)}
-  className={`px-4 py-2 rounded-xl ${
-    timerLedAction ? "bg-green-500" : "bg-white/10"
-  }`}
->
-  {timerLedAction ? "ON" : "OFF"}
-</button>
-    </div>
+              <button
+                onClick={() => setTimerLedAction(!timerLedAction)}
+                className={`px-4 py-2 rounded-xl ${
+                  timerLedAction ? "bg-green-500" : "bg-white/10"
+                }`}
+              >
+                {timerLedAction ? "ON" : "OFF"}
+              </button>
+            </div>
+          </>
+        )}
 
-    
-  </>
-)}
+        {showColorAndAnimation && (
+          <>
+            {/* ================= COLOR ================= */}
+            <div className="mt-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] sm:text-xs uppercase text-gray-400">
+                  Timer Color
+                </span>
 
-{
-  showColorAndAnimation && (
-    <>
-    {/* ================= COLOR ================= */}
-        <div className="mt-2 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-xs uppercase text-gray-400">
-              Timer Color
-            </span>
-
-            <span className="text-[10px] sm:text-xs font-mono">
-              {timerColor}
-            </span>
-          </div>
-          </div>
-       <label className="relative flex-1 h-9 sm:h-10 rounded-xl border border-white/10 bg-black/20 overflow-hidden">
-      <input
-        type="color"
-        value={timerColor}
-        onChange={(e) => setTimerColor(e.target.value)}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-      />
-
-      <div className="absolute inset-0 flex items-center justify-center gap-2">
-        <div
-          className="w-5 h-5 rounded-full border border-white/30"
-          style={{ backgroundColor: timerColor }}
-        />
-        <span className="text-xs sm:text-sm text-white">
-          Pick Color
-        </span>
-      </div>
-    </label>
-
-  {/* DEFAULT COLORS */}
-  <div className="flex gap-2 justify-center">
-    {[
-      "#ff0000",
-      "#ffff00",
-      "#00ff00",
-      "#0000ff",
-      "#ffffff",
-    ].map((c) => (
-      <button
-        key={c}
-        type="button"
-        onClick={() => setTimerColor(c)}
-        className={`w-8 h-8 rounded-full border transition-all ${
-          timerColor === c
-            ? "ring-2 ring-white scale-110"
-            : "border-white/10"
-        }`}
-        style={{ backgroundColor: c }}
-      />
-    ))}
-  </div>
-    </>
-  )
-}
-
-        
-
-        {/* ================= ANIMATION ================= */}
-        <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
-          {animationOptions.map((a) => (
-            <button
-              key={a.value}
-              type="button"
-              onClick={() => setTimerAnimation(a.value)}
-              className={`p-3 sm:p-4 rounded-xl border text-left transition-all ${
-                timerAnimation === a.value
-                  ? "border-emerald-500 bg-emerald-500/10"
-                  : "border-white/10"
-              }`}
-            >
-              <div className="text-xs sm:text-sm font-medium">
-                {a.label}
+                <span className="text-[10px] sm:text-xs font-mono">
+                  {timerColor}
+                </span>
               </div>
+            </div>
+            <label className="relative flex-1 h-9 sm:h-10 rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+              <input
+                type="color"
+                value={timerColor}
+                onChange={(e) => setTimerColor(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
 
-              <div className="text-[8px] sm:text-xs text-gray-400 mt-1">
-                {a.desc}
+              <div className="absolute inset-0 flex items-center justify-center gap-2">
+                <div
+                  className="w-5 h-5 rounded-full border border-white/30"
+                  style={{ backgroundColor: timerColor }}
+                />
+                <span className="text-xs sm:text-sm text-white">
+                  Pick Color
+                </span>
               </div>
-            </button>
-          ))}
-        </div>
+            </label>
+
+            {/* DEFAULT COLORS */}
+            <div className="flex gap-2 justify-center">
+              {["#ff0000", "#ffff00", "#00ff00", "#0000ff", "#ffffff"].map(
+                (c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setTimerColor(c)}
+                    className={`w-8 h-8 rounded-full border transition-all ${
+                      timerColor === c
+                        ? "ring-2 ring-white scale-110"
+                        : "border-white/10"
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                ),
+              )}
+            </div>
+
+            {/* ================= ANIMATION ================= */}
+            <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+              {animationOptions.map((a) => (
+                <button
+                  key={a.value}
+                  type="button"
+                  onClick={() => setTimerAnimation(a.value)}
+                  className={`p-3 sm:p-4 rounded-xl border text-left transition-all ${
+                    timerAnimation === a.value
+                      ? "border-emerald-500 bg-emerald-500/10"
+                      : "border-white/10"
+                  }`}
+                >
+                  <div className="text-xs sm:text-sm font-medium">
+                    {a.label}
+                  </div>
+
+                  <div className="text-[8px] sm:text-xs text-gray-400 mt-1">
+                    {a.desc}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* ================= FOOTER ================= */}
         <DialogFooter className="mt-2 flex flex-col-reverse sm:flex-row gap-2">
           <DialogClose asChild>
-            <button
-              className="w-full sm:w-auto px-3 py-2 rounded-xl bg-white/10 text-sm"
-            >
+            <button className="w-full sm:w-auto px-3 py-2 rounded-xl bg-white/10 text-sm">
               Cancel
             </button>
           </DialogClose>
