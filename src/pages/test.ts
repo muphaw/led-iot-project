@@ -51,19 +51,16 @@
 // unsigned long sunsetDuration = 30000;
 
 // // =======================================================
-// // POMODORO TIMER ENGINE (UPDATED TO MATCH REACT PARAMS)
+// // POMODORO TIMER ENGINE
 // // =======================================================
 // bool timerActive = false;
 // bool timerPaused = false;
-
 // unsigned long timerEndTime = 0;
 // unsigned long pausedRemaining = 0;
-
 // String timerAnimation = "blink";
+// String currentTimerAction = "on"; // Tracks if timer turns light ON or OFF
 
-// // =======================================================
-// // ALARM ENGINE
-// // =======================================================
+// // ================= ALARM ENGINE =================
 // bool alarmEnabled = false;
 // bool alarmTriggered = false;
 // String alarmTime = "";
@@ -74,6 +71,15 @@
 // String activeAnimationType = "";
 // unsigned long animationStartTime = 0;
 // uint8_t rainbowHue = 0;
+
+// int targetR = 255;
+// int targetG = 0;
+// int targetB = 0;
+// String targetAnimation = "blink";
+
+// int backupR = 255;
+// int backupG = 255;
+// int backupB = 255;
 
 // // ================= LED CORE FUNCTIONS =================
 // void setLED(bool state) {
@@ -107,95 +113,83 @@
 // void stopTriggerAnimation() {
 //   animationRunning = false;
 //   activeAnimationType = "";
-//   setLED(false);
 // }
 
 // void runActiveAnimation() {
-
 //   if (!animationRunning) return;
 
-//   // ================= SMOOTH MASTER BRIGHTNESS =================
 //   static float smoothBrightness = 0;
 //   int targetBrightness = map(manualBrightness, 0, 100, 10, 255);
-//   smoothBrightness += (targetBrightness - smoothBrightness) * 0.08; // smoothing factor
+  
+//   // Skip smooth tracking on fade_out to avoid startup lag blinks
+//   if (activeAnimationType != "fade_out") {
+//     smoothBrightness += (targetBrightness - smoothBrightness) * 0.08;
+//   }
 
-//   // ================= FADE =================
+//   // ================= FADE IN =================
 //   if (activeAnimationType == "fade") {
-
 //     float progress = (float)(millis() - animationStartTime) / 3000.0;
 //     progress = constrain(progress, 0.0, 1.0);
-
-//     // Smooth curve (IMPORTANT: makes fade feel natural)
-//     float smoothProgress = pow(progress, 2.2);  // gamma correction
+//     float smoothProgress = pow(progress, 2.2);  
 
 //     FastLED.setBrightness(smoothProgress * smoothBrightness);
+//     for (int i = 0; i < NUM_LEDS; i++) leds[i] = CRGB(currentR, currentG, currentB);
+//     FastLED.show();
+
+//     if (progress >= 1.0) animationRunning = false;
+//   }
+  
+//   // ================= SLOW FADE OUT =================
+//   else if (activeAnimationType == "fade_out") {
+//     float progress = (float)(millis() - animationStartTime) / (float)sunsetDuration;
+//     progress = constrain(progress, 0.0, 1.0);
+    
+//     float smoothProgress = 1.0 - pow(progress, 2.2); 
+
+//     // Directly scale down from target hardware limits
+//     int currentFadeBrightness = smoothProgress * targetBrightness;
+//     FastLED.setBrightness(currentFadeBrightness);
 
 //     for (int i = 0; i < NUM_LEDS; i++) {
 //       leds[i] = CRGB(currentR, currentG, currentB);
 //     }
-
 //     FastLED.show();
 
 //     if (progress >= 1.0) {
 //       animationRunning = false;
+//       setLED(false); 
 //     }
 //   }
 
-//   // ================= BLINK (unchanged but stable) =================
+//   // ================= BLINK =================
 //   else if (activeAnimationType == "blink") {
-
 //     bool toggle = ((millis() - animationStartTime) / 500) % 2 == 0;
-
 //     FastLED.setBrightness(smoothBrightness);
-
-//     for (int i = 0; i < NUM_LEDS; i++) {
-//       leds[i] = toggle
-//         ? CRGB(currentR, currentG, currentB)
-//         : CRGB::Black;
-//     }
-
+//     for (int i = 0; i < NUM_LEDS; i++) leds[i] = toggle ? CRGB(currentR, currentG, currentB) : CRGB::Black;
 //     FastLED.show();
 //   }
 
-//   // ================= SMOOTH WAVE (FIXED) =================
+//   // ================= SMOOTH WAVE =================
 //   else if (activeAnimationType == "wave") {
-
-//   uint8_t timeShift = millis() / 15;  // smooth motion speed
-
-//   int baseBrightness = map(manualBrightness, 0, 100, 20, 255);
-//   FastLED.setBrightness(baseBrightness);
-
-//   for (int i = 0; i < NUM_LEDS; i++) {
-
-//     // 🔥 continuous phase (same idea as rainbow hue shift)
-//     uint8_t wavePhase = i * 25 + timeShift;
-
-//     // smooth sine wave field
-//     uint8_t w = sin8(wavePhase);
-
-//     // convert to smooth 0–1 energy
-//     float energy = w / 255.0;
-
-//     // soften curve (removes flicker)
-//     energy = sin(energy * PI);
-
-//     // final brightness per LED
-//     uint8_t brightness = energy * 255;
-
-//     leds[i] = CRGB(currentR, currentG, currentB);
-//     leds[i].fadeToBlackBy(255 - brightness);
+//     uint8_t timeShift = millis() / 15;  
+//     int baseBrightness = map(manualBrightness, 0, 100, 20, 255);
+//     FastLED.setBrightness(baseBrightness);
+//     for (int i = 0; i < NUM_LEDS; i++) {
+//       uint8_t wavePhase = i * 25 + timeShift;
+//       uint8_t w = sin8(wavePhase);
+//       float energy = w / 255.0;
+//       energy = sin(energy * PI);
+//       uint8_t brightness = energy * 255;
+//       leds[i] = CRGB(currentR, currentG, currentB);
+//       leds[i].fadeToBlackBy(255 - brightness);
+//     }
+//     FastLED.show();
 //   }
-
-//   FastLED.show();
-// }
 
 //   // ================= RAINBOW =================
 //   else if (activeAnimationType == "rainbow") {
-
 //     FastLED.setBrightness(smoothBrightness);
-
 //     fill_rainbow(leds, NUM_LEDS, rainbowHue++, 25);
-
 //     FastLED.show();
 //   }
 // }
@@ -233,7 +227,7 @@
 // void handleMusicOn() { sendCORSHeaders(); musicMode = true; server.send(200, "text/plain", "FFT Mode ON"); }
 // void handleMusicOff() { sendCORSHeaders(); musicMode = false; setLED(false); server.send(200, "text/plain", "FFT Mode OFF"); }
 
-// // ================= LIVE POLLING STATE API (MATCHED TO FRONTEND) =================
+// // ================= LIVE POLLING STATE API =================
 // void handleTimerStatus() {
 //   sendCORSHeaders();
 
@@ -244,9 +238,7 @@
 //     state = "done";
 //   }
 //   else if (timerActive) {
-
 //     state = "running";
-
 //     if (timerPaused)
 //       remainingMs = pausedRemaining;
 //     else
@@ -264,66 +256,82 @@
 //   server.send(200, "application/json", json);
 // }
 
-// // ================= TIMER CONTROLS (UPDATED TO EXPECT H, M, S) =================
+// // ================= TIMER CONTROLS =================
 // void handleStartTimer() {
 //   sendCORSHeaders();
 
 //   long h = server.hasArg("hour") ? server.arg("hour").toInt() : 0;
 //   long m = server.hasArg("min") ? server.arg("min").toInt() : 0;
 //   long s = server.hasArg("second") ? server.arg("second").toInt() : 0;
-
 //   long totalSeconds = h * 3600 + m * 60 + s;
 
 //   if (totalSeconds <= 0) {
-//     server.send(400, "text/plain", "Invalid Timer");
+//     server.send(400, "text/plain", "Invalid Timer Duration");
 //     return;
 //   }
 
-//   if (server.hasArg("r")) currentR = server.arg("r").toInt();
-//   if (server.hasArg("g")) currentG = server.arg("g").toInt();
-//   if (server.hasArg("b")) currentB = server.arg("b").toInt();
+//   currentTimerAction = server.hasArg("action") ? server.arg("action") : "on";
 
-//   timerAnimation = server.hasArg("animation")
-//                      ? server.arg("animation")
-//                      : "blink";
+//   if (ledState) {
+//     backupR = currentR;
+//     backupG = currentG;
+//     backupB = currentB;
+//   }
+
+//   if (server.hasArg("r")) targetR = server.arg("r").toInt();
+//   if (server.hasArg("g")) targetG = server.arg("g").toInt();
+//   if (server.hasArg("b")) targetB = server.arg("b").toInt();
+//   targetAnimation = server.hasArg("animation") ? server.arg("animation") : "blink";
 
 //   timerEndTime = millis() + (totalSeconds * 1000UL);
-
 //   timerActive = true;
 //   timerPaused = false;
 //   pausedRemaining = 0;
+  
+//   stopTriggerAnimation(); 
 
-//   stopTriggerAnimation();
+//   // Start dimming immediately across the length of the countdown window
+//   if (currentTimerAction == "off") {
+//     sunsetDuration = totalSeconds * 1000UL; 
+//     startTriggerAnimation("fade_out");
+//   }
 
-//   server.send(200, "text/plain", "Timer Started");
+//   server.send(200, "text/plain", "Timer Initiated");
 // }
 
 // void handlePauseTimer() {
 //   sendCORSHeaders();
-
-//   if (!timerActive || timerPaused) {
-//     server.send(400, "text/plain", "Timer not running");
-//     return;
-//   }
-
+//   if (!timerActive || timerPaused) { server.send(400, "text/plain", "Timer not running"); return; }
+  
 //   pausedRemaining = timerEndTime - millis();
-
 //   timerPaused = true;
 
+//   // 🔥 FIX: Pause the fading engine calculation loop immediately
+//   if (currentTimerAction == "off") {
+//     animationRunning = false; 
+//   }
 //   server.send(200, "text/plain", "Paused");
 // }
 
 // void handleResumeTimer() {
 //   sendCORSHeaders();
+//   if (!timerActive || !timerPaused) { server.send(400, "text/plain", "Timer not paused"); return; }
 
-//   if (!timerActive || !timerPaused) {
-//     server.send(400, "text/plain", "Timer not paused");
-//     return;
+//   // 🔥 FIX: Extract structural parameter payload directly from the React payload URL
+//   if (server.hasArg("remaining")) {
+//     long remainingSeconds = server.arg("remaining").toInt();
+//     pausedRemaining = remainingSeconds * 1000UL;
 //   }
 
 //   timerEndTime = millis() + pausedRemaining;
-
 //   timerPaused = false;
+
+//   // 🔥 FIX: Re-align fade-out visual parameters matching the new time window
+//   if (currentTimerAction == "off") {
+//     sunsetDuration = pausedRemaining; 
+//     animationStartTime = millis();    
+//     animationRunning = true;
+//   }
 
 //   server.send(200, "text/plain", "Resumed");
 // }
@@ -334,8 +342,13 @@
 //   timerActive = false;
 //   timerPaused = false;
 //   pausedRemaining = 0;
-
 //   stopTriggerAnimation();
+
+//   // Bring the safe room environment light back alive instantly
+//   currentR = backupR;
+//   currentG = backupG;
+//   currentB = backupB;
+//   setLED(true);
 
 //   server.send(200, "text/plain", "Canceled");
 // }
@@ -344,14 +357,23 @@
 // void handleAlarm() {
 //   sendCORSHeaders();
 //   if (!server.hasArg("time") || !server.hasArg("r") || !server.hasArg("g") || !server.hasArg("b")) {
-//     server.send(400, "text/plain", "Missing context parameters");
+//     server.send(400, "text/plain", "Missing parameters");
 //     return;
 //   }
-//   alarmTime = server.arg("time"); // Expected format: "HH:MM AM" or "HH:MM PM" from formatAlarm()
-//   currentR = server.arg("r").toInt();
-//   currentG = server.arg("g").toInt();
-//   currentB = server.arg("b").toInt();
-//   alarmAnimation = server.hasArg("animation") ? server.arg("animation") : "fade";
+  
+//   alarmTime = server.arg("time"); 
+//   String action = server.hasArg("action") ? server.arg("action") : "on";
+
+//   if (server.hasArg("r")) targetR = server.arg("r").toInt();
+//   if (server.hasArg("g")) targetG = server.arg("g").toInt();
+//   if (server.hasArg("b")) targetB = server.arg("b").toInt();
+  
+//   if (action == "off") {
+//     alarmAnimation = "fade_out";
+//     sunsetDuration = 10000; 
+//   } else {
+//     alarmAnimation = server.hasArg("animation") ? server.arg("animation") : "fade";
+//   }
   
 //   alarmEnabled = true;
 //   alarmTriggered = false;
@@ -362,7 +384,13 @@
 //   sendCORSHeaders();
 //   alarmTriggered = false;
 //   alarmEnabled = false;
-//   stopTriggerAnimation();
+//   animationRunning = false;
+//   activeAnimationType = "";
+
+//   currentR = backupR;
+//   currentG = backupG;
+//   currentB = backupB;
+//   setLED(true);
 //   server.send(200, "text/plain", "Alarm Canceled");
 // }
 
@@ -426,45 +454,27 @@
 //   }
 // }
 
-// // ================= REAL-TIME NTP COMPLIANT ALARM CHECK =================
 // void checkAlarmTime(struct tm* timeinfo) {
 //   char currentFormatted[9];
-//   int hr12 = timeinfo->tm_hour % 12;
-//   if (hr12 == 0) hr12 = 12;
-//   const char* ampm = (timeinfo->tm_hour >= 12) ? "PM" : "AM";
-  
-//   // Format matching formatAlarm util output exactly: "HH:MM AM"
 //   sprintf(currentFormatted, "%02d:%02d", timeinfo->tm_hour, timeinfo->tm_min);
-
-//   Serial.print("Alarm set: ");
-//   Serial.println(alarmTime);
-
-//   Serial.print("Current time: ");
-//   Serial.println(currentFormatted);
   
 //   if (alarmTime == String(currentFormatted)) {
-
 //     Serial.println("ALARM TRIGGERED ✅");
+//     alarmTriggered = true;
+//     backupR = currentR; backupG = currentG; backupB = currentB;
 
-//   alarmTriggered = true;
-
-//   // STOP everything first
-//   stopTriggerAnimation();
-
-//   // FORCE immediate visible state (IMPORTANT FIX)
-//   setLED(true);
-//   FastLED.show();
-
-//   delay(50); // tiny visual sync buffer
-
-//   // NOW start animation
-//   startTriggerAnimation(alarmAnimation);
-
-//   // safety fallback: if animation is empty
-//   if (alarmAnimation == "" || alarmAnimation == "none") {
-//     setLED(true);
+//     if (alarmAnimation == "fade_out") {
+//       stopTriggerAnimation();
+//       startTriggerAnimation("fade_out");
+//     } else {
+//       currentR = targetR; currentG = targetG; currentB = targetB;
+//       stopTriggerAnimation();
+//       setColor(currentR, currentG, currentB);
+//       delay(50); 
+//       startTriggerAnimation(alarmAnimation);
+//       if (alarmAnimation == "" || alarmAnimation == "none") setLED(true);
+//     }
 //   }
-// }
 // }
 
 // // ================= SETUP =================
@@ -480,18 +490,12 @@
 
 //   WiFiManager wm;
 //   wm.setConfigPortalTimeout(180); 
-  
-//   if (!wm.autoConnect("ESP32_Config_AP")) {
-//     delay(3000);
-//     ESP.restart();
-//   }
+//   if (!wm.autoConnect("ESP32_Config_AP")) { delay(3000); ESP.restart(); }
 
 //   Serial.print("Assigned Node IP: ");
 //   Serial.println(WiFi.localIP());
-
 //   syncTime();
 
-//   // --- API Routes (Perfect Alignment mapping to your Manual.tsx architecture) ---
 //   server.on("/", handleRoot);
 //   server.on("/on", handleOn);
 //   server.on("/off", handleOff);
@@ -502,69 +506,58 @@
 //   server.on("/music/off", handleMusicOff);
 //   server.on("/brightness", handleBrightness);
 //   server.on("/wifi/reset", handleWiFiReset);
-
-//   // Re-aligned Layout Routes
-//   server.on("/timer", handleStartTimer);             // Matches: fetch(`${ESP32_BASE_URL}/timer?...`)
-//   server.on("/timer/pause", handlePauseTimer);       // Matches: fetch(`${ESP32_BASE_URL}/timer/pause`)
-//   server.on("/timer/resume", handleResumeTimer);     // Matches: fetch(`${ESP32_BASE_URL}/timer/resume`)
-//   server.on("/timer/cancel", handleCancelTimer);     // Matches: fetch(`${ESP32_BASE_URL}/timer/cancel`)
-//   server.on("/timer/status", handleTimerStatus);     // Matches: fetch(`${ESP32_BASE_URL}/timer/status`)
-  
-//   server.on("/alarm", handleAlarm);                  // Matches: fetch(`${ESP32_BASE_URL}/alarm?...`)
-//   server.on("/alarm/off", handleCancelAlarm);        // Matches: fetch(`${ESP32_BASE_URL}/alarm/off`)
+//   server.on("/timer", handleStartTimer);             
+//   server.on("/timer/pause", handlePauseTimer);       
+//   server.on("/timer/resume", handleResumeTimer);     
+//   server.on("/timer/cancel", handleCancelTimer);     
+//   server.on("/timer/status", handleTimerStatus);     
+//   server.on("/alarm", handleAlarm);                  
+//   server.on("/alarm/off", handleCancelAlarm);        
 //   server.begin();
-//   Serial.println("HTTP Server Running.");
 // }
 
 // // ================= MAIN RUNTIME LOOP =================
 // void loop() {
 //   server.handleClient();
   
-//   if (animationRunning) {
+//   if (animationRunning && !timerPaused) {
 //     runActiveAnimation();
 //   }
 
-//   // Physical pin manual hardware override sequence
 //   if (digitalRead(TRIGGER_PIN) == LOW) {
 //     delay(50);
-//     if (digitalRead(TRIGGER_PIN) == LOW) {
-//       handleWiFiReset();
-//     }
+//     if (digitalRead(TRIGGER_PIN) == LOW) handleWiFiReset();
 //   }
 
-//   // PIR Sensor Monitoring Loop
-//   if (motionEnabled && !animationRunning) {
+//   // PIR sensor loop checking block (Ignores loops while countdown runs)
+//   if (motionEnabled && !animationRunning && !timerActive) {
 //     motionState = digitalRead(PIR_PIN);
-//     if (motionState == HIGH) {
-//       lastMotionTime = millis();
-//       setLED(true);
-//     }
-//     if (millis() - lastMotionTime > holdTime) {
-//       setLED(false);
-//     }
+//     if (motionState == HIGH) { lastMotionTime = millis(); setLED(true); }
+//     if (millis() - lastMotionTime > holdTime) setLED(false);
 //   }
 
-//   // Active Countdown Verification Engine
 //   if (timerActive && !timerPaused) {
+//     if (millis() >= timerEndTime) {
+//       timerActive = false;
+//       pausedRemaining = 0;
 
-//   if (millis() >= timerEndTime) {
-
-//     timerActive = false;
-//     pausedRemaining = 0;
-
-//     startTriggerAnimation(timerAnimation);
+//       if (currentTimerAction == "off") {
+//         stopTriggerAnimation();
+//         setLED(false); // Snap perfectly down to 0 remaining emissions 
+//       } else {
+//         currentR = targetR; currentG = targetG; currentB = targetB;
+//         timerAnimation = targetAnimation;
+//         setColor(currentR, currentG, currentB);
+//         startTriggerAnimation(timerAnimation);
+//       }
+//     }
 //   }
-// }
 
-//   // Active Live Alarm Verification Engine
 //   if (alarmEnabled && !alarmTriggered) {
 //     struct tm timeinfo;
-//     if (getLocalTime(&timeinfo)) {
-//       checkAlarmTime(&timeinfo);
-//     }
+//     if (getLocalTime(&timeinfo)) checkAlarmTime(&timeinfo);
 //   }
 
-//   // Audio Music Mode Active Sampling Engine
 //   if (musicMode && !animationRunning && !timerActive) {
 //     readAudioFFT();
 //   }

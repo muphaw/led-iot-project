@@ -13,7 +13,7 @@ import ColorPickerPanel from "./components/ColorPickerPanel";
 import SensorToggleCard from "./components/SensorToggleCard";
 
 const defaultColors = ["#FF0000", "#0000FF", "#FFFFFF"];
-const ESP32_BASE_URL = "http://192.168.1.16";
+const ESP32_BASE_URL = "http://192.168.1.6";
 
 const Manual = () => {
   const [color, setColor] = useState("#FF0000");
@@ -173,15 +173,25 @@ const Manual = () => {
   const [savedAlarm, setSavedAlarm] = useState<SavedAlarm | null>(null);
 
   const startAlarm = async () => {
+    // 1. Format time into "HH:MM" or matching standard structure
     const time = formatAlarm(hour, minute, period);
+    
+    // 2. Extract standard RGB values from your hex picker state
     const r = parseInt(scheduledColor.slice(1, 3), 16);
     const g = parseInt(scheduledColor.slice(3, 5), 16);
     const b = parseInt(scheduledColor.slice(5, 7), 16);
 
-    const url = `${ESP32_BASE_URL}/alarm?time=${time}&r=${r}&g=${g}&b=${b}${
+    // 🔥 FIX: Pull the active toggle state. 
+    // True means the user wants the LED to turn ON with color/animation. 
+    // False means they want the LED to turn OFF (bedtime mode).
+    const actionParam = alarmLedAction ? "on" : "off";
+
+    // 3. Append the action parameter into the API payload string
+    const url = `${ESP32_BASE_URL}/alarm?time=${encodeURIComponent(time)}&action=${actionParam}&r=${r}&g=${g}&b=${b}${
       alarmAnimation ? `&animation=${alarmAnimation}` : ""
     }`;
 
+    // 4. Save to local state so the active alarm card updates on screen
     setSavedAlarm({
       hour,
       minute,
@@ -199,7 +209,12 @@ const Manual = () => {
   };
 
   const offAlarm = async () => {
-    setSavedAlarm(null);
+    setSavedAlarm(null); // Clear the active alarm card from UI
+    
+    // 🔥 FIX: Because your backend automatically turns the LED back ON 
+    // with your original background color when dismissed, update React's state:
+    setIsOn(true); 
+
     try {
       await fetch(`${ESP32_BASE_URL}/alarm/off`);
     } catch (err) {
@@ -230,13 +245,17 @@ const Manual = () => {
     const g = parseInt(timerColor.slice(3, 5), 16);
     const b = parseInt(timerColor.slice(5, 7), 16);
 
-    const url = `${ESP32_BASE_URL}/timer?hour=${h}&min=${m}&second=${s}&led=${
-      timerLedAction ? 1 : 0
-    }&r=${r}&g=${g}&b=${b}${timerAnimation ? `&animation=${timerAnimation}` : ""}`;
+    const actionParam = timerLedAction ? "on" : "off";
 
+    const url = `${ESP32_BASE_URL}/timer?hour=${h}&min=${m}&second=${s}&action=${actionParam}&r=${r}&g=${g}&b=${b}${
+      timerAnimation ? `&animation=${timerAnimation}` : ""
+    }`;
+
+    // 🔥 FIX: Unified countdown view pipeline state initialization
     setTimerState("running");
     setTotalDuration(totalSeconds);
     setCountdown(totalSeconds);
+    
     setTimerDialogOpen(false);
 
     try {
@@ -247,28 +266,22 @@ const Manual = () => {
   };
 
   const pauseTimer = async () => {
-    setTimerPaused(true);
-    try {
-      const response = await fetch(`${ESP32_BASE_URL}/timer/pause`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data && typeof data.remainingSeconds === "number") {
-          setCountdown(data.remainingSeconds);
-        }
-      }
-    } catch (err) {
-      console.error("Hardware pause sync failed:", err);
-    }
-  };
+  setTimerPaused(true);
+  try {
+    await fetch(`${ESP32_BASE_URL}/timer/pause`);
+  } catch (err) {
+    console.error("Hardware pause sync failed:", err);
+  }
+};
 
   const resumeTimer = async () => {
-    setTimerPaused(false);
-    try {
-      await fetch(`${ESP32_BASE_URL}/timer/resume?remaining=${countdown}`);
-    } catch (err) {
-      console.error("Hardware resume sync failed:", err);
-    }
-  };
+  setTimerPaused(false);
+  try {
+    await fetch(`${ESP32_BASE_URL}/timer/resume?remaining=${countdown}`);
+  } catch (err) {
+    console.error("Hardware resume sync failed:", err);
+  }
+};
 
   const cancelTimer = async () => {
     setTimerState("idle");
