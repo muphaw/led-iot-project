@@ -13,17 +13,14 @@ import ColorPickerPanel from "./components/ColorPickerPanel";
 import SensorToggleCard from "./components/SensorToggleCard";
 
 const defaultColors = ["#FF0000", "#0000FF", "#FFFFFF"];
-const ESP32_BASE_URL = "http://192.168.1.6";
-
+import { ref, set, update, onValue } from "firebase/database";
+import {db} from "@/lib/firebase";
 const Manual = () => {
   const [color, setColor] = useState("#FF0000");
   const [isOn, setIsOn] = useState(false);
   const [brightness, setBrightness] = useState(50);
 
-  // const [enableTimer, setEnableTimer] = useState(false);
-  // const [scheduleTime, setScheduleTime] = useState("");
   const [scheduledColor, setScheduledColor] = useState("#FF0000");
-
   const [totalDuration, setTotalDuration] = useState<number>(0);
 
   const [period, setPeriod] = useState("AM");
@@ -37,7 +34,18 @@ const Manual = () => {
   const [timerColor, setTimerColor] = useState("#00FF00");
   const [timerLedAction, setTimerLedAction] = useState(true);
 
-  const hours = Array.from({ length: 12 }, (_, i) =>
+  const [motionEnabled, setMotionEnabled] = useState(false);
+  const [musicEnabled, setMusicEnabled] = useState(false);
+
+  const [timerHour, setTimerHour] = useState("00");
+  const [timerMinute, setTimerMinute] = useState("00");
+  const [timerSecond, setTimerSecond] = useState("00");
+  const [timerPaused, setTimerPaused] = useState(false);
+
+  const [timerDialogOpen, setTimerDialogOpen] = useState(false);
+  const [timerAnimation, setTimerAnimation] = useState<AlarmAnimation>("fade");
+
+    const hours = Array.from({ length: 12 }, (_, i) =>
     String(i).padStart(2, "0"),
   );
   const alarmHours = Array.from({ length: 12 }, (_, i) =>
@@ -50,63 +58,46 @@ const Manual = () => {
     String(i).padStart(2, "0"),
   );
 
-  // Sensors
-  const [motionEnabled, setMotionEnabled] = useState(false);
-  const [musicEnabled, setMusicEnabled] = useState(false);
-
-  // Timers
-  const [timerHour, setTimerHour] = useState("00");
-  const [timerMinute, setTimerMinute] = useState("00");
-  const [timerSecond, setTimerSecond] = useState("00");
-  const [timerPaused, setTimerPaused] = useState(false);
-
-  const [timerDialogOpen, setTimerDialogOpen] = useState(false);
-  const [timerAnimation, setTimerAnimation] = useState<AlarmAnimation>("fade");
 
   const showIdle = timerState === "idle";
   const showActive = timerState === "running";
   const showDone = timerState === "done";
 
-  // Chronometer Trigger Engine
-  // useEffect(() => {
-  //   if (!enableTimer) return;
+  // ================= 1. LIVE EVENT DATABASE LISTENER =================
+  useEffect(() => {
+    const rootRef = ref(db, "led");
+    const unsubscribe = onValue(rootRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        // Sync hardware metrics back upstream into React UI inputs natively
+        if (data.device_state) {
+          setIsOn(data.device_state.isOn);
+          setBrightness(data.device_state.brightness);
+          if (data.device_state.sensors) {
+            setMotionEnabled(data.device_state.sensors.motionEnabled);
+            setMusicEnabled(data.device_state.sensors.musicEnabled);
+          }
+        }
+        if (data.timer) {
+          setTimerState(data.timer.state);
+          setCountdown(data.timer.remainingSeconds);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
-  //   const interval = setInterval(() => {
-  //     const now = new Date();
-  //     const hh = now.getHours().toString().padStart(2, "0");
-  //     const mm = now.getMinutes().toString().padStart(2, "0");
-  //     const ss = now.getSeconds().toString().padStart(2, "0");
-
-  //     if (scheduleTime) {
-  //       const parts = scheduleTime.split(":");
-  //       const compareTime =
-  //         parts.length === 2 ? `${hh}:${mm}` : `${hh}:${mm}:${ss}`;
-
-  //       if (compareTime === scheduleTime) {
-  //         setColor(scheduledColor);
-  //         setIsOn(true);
-  //       }
-  //     }
-  //   }, 1000);
-
-  //   return () => clearInterval(interval);
-  // }, [enableTimer, scheduleTime, scheduledColor]);
-
-  // Sync Color Outwards
+  // ================= 2. LIVE MANUAL COLOR WRITES =================
   useEffect(() => {
     if (!isOn) return;
-
     const { r, g, b } = hexToRgb(color);
     const timeout = setTimeout(() => {
-      fetch(`${ESP32_BASE_URL}/color?r=${r}&g=${g}&b=${b}`).catch((err) =>
-        console.error("Color sync error:", err),
-      );
-    }, 80);
-
+      update(ref(db, "led/device_state/color"), { r, g, b });
+    }, 100);
     return () => clearTimeout(timeout);
   }, [color, isOn]);
 
-  // Timer Countdown Logic
+  // Local React Interval to keep ticking UI smooth while database syncs
   useEffect(() => {
     if (timerState !== "running" || countdown === null || timerPaused) return;
 
@@ -125,46 +116,46 @@ const Manual = () => {
     return () => clearInterval(interval);
   }, [timerState, timerPaused]);
 
-  // Hardware Interactions
-  const toggleLED = () => {
-    const newState = !isOn;
-    setIsOn(newState); // Instant UI feedback
+  // ================= 2. LIVE MANUAL COLOR WRITES =================
+  useEffect(() => {
+    if (!isOn) return;
+    const { r, g, b } = hexToRgb(color);
+    const timeout = setTimeout(() => {
+      // Use set directly on the absolute endpoint so it stays a flat {r, g, b} object
+      set(ref(db, "led/device_state/color"), { r, g, b });
+    }, 100);
+    return () => clearTimeout(timeout);
+  }, [color, isOn]);
 
-    // Fire network request in the background immediately
-    const url = newState ? "/on" : "/off";
-    fetch(`${ESP32_BASE_URL}${url}`).catch((error) => {
-      // If it fails, revert the UI state gracefully
-      setIsOn(!newState);
-      console.error("Hardware link latency timeout:", error);
-    });
-  };
+  // ================= 3. CORE TRIGGER ACTIONS =================
+  const toggleLED = async () => {
+  const nextState = !isOn;
+  setIsOn(nextState);
+  
+  try {
+    // Direct path write
+    await set(ref(db, "led/device_state/isOn"), nextState);
+    alert("Success! Sent to Firebase: " + nextState);
+  } catch (error: any) {
+    // If permission or configuration fails, this will show you why
+    alert("Firebase Error: " + error.message);
+  }
+};
 
   const toggleMotionSensor = async () => {
-    const newState = !motionEnabled;
-    setMotionEnabled(newState);
-    try {
-      await fetch(`${ESP32_BASE_URL}/motion/${newState ? "on" : "off"}`);
-    } catch (err) {
-      console.error("Motion toggle failed:", err);
-    }
+    const nextState = !motionEnabled;
+    setMotionEnabled(nextState);
+    set(ref(db, "led/device_state/sensors/motionEnabled"), nextState);
   };
 
   const togglemusicSensor = async () => {
-    const newState = !musicEnabled;
-    setMusicEnabled(newState);
-    try {
-      await fetch(`${ESP32_BASE_URL}${newState ? "/music/on" : "/music/off"}`);
-    } catch (err) {
-      console.error("Music mode error:", err);
-    }
+    const nextState = !musicEnabled;
+    setMusicEnabled(nextState);
+    set(ref(db, "led/device_state/sensors/musicEnabled"), nextState);
   };
 
   const updateBrightness = async (value: number) => {
-    try {
-      await fetch(`${ESP32_BASE_URL}/brightness?value=${value}`);
-    } catch (err) {
-      console.log("Brightness update failed", err);
-    }
+    set(ref(db, "led/device_state/brightness"), value);
   };
 
   const [alarmAnimation, setAlarmAnimation] = useState<AlarmAnimation>("fade");
@@ -173,25 +164,22 @@ const Manual = () => {
   const [savedAlarm, setSavedAlarm] = useState<SavedAlarm | null>(null);
 
   const startAlarm = async () => {
-    // 1. Format time into "HH:MM" or matching standard structure
-    const time = formatAlarm(hour, minute, period);
-    
-    // 2. Extract standard RGB values from your hex picker state
+    const rawTime = formatAlarm(hour, minute, period);
+    const cleanTime = decodeURIComponent(rawTime); // 🔥 Removes the %3A bug!
+
     const r = parseInt(scheduledColor.slice(1, 3), 16);
     const g = parseInt(scheduledColor.slice(3, 5), 16);
     const b = parseInt(scheduledColor.slice(5, 7), 16);
-
-    // 🔥 FIX: Pull the active toggle state. 
-    // True means the user wants the LED to turn ON with color/animation. 
-    // False means they want the LED to turn OFF (bedtime mode).
     const actionParam = alarmLedAction ? "on" : "off";
 
-    // 3. Append the action parameter into the API payload string
-    const url = `${ESP32_BASE_URL}/alarm?time=${encodeURIComponent(time)}&action=${actionParam}&r=${r}&g=${g}&b=${b}${
-      alarmAnimation ? `&animation=${alarmAnimation}` : ""
-    }`;
+    await set(ref(db, "led/alarm"), {
+      enabled: true,
+      time: cleanTime,
+      action: actionParam,
+      animation: alarmAnimation,
+      alarmColor: { r, g, b }
+    });
 
-    // 4. Save to local state so the active alarm card updates on screen
     setSavedAlarm({
       hour,
       minute,
@@ -200,102 +188,61 @@ const Manual = () => {
       animation: alarmAnimation,
     });
     setAlarmDialogOpen(false);
-
-    try {
-      await fetch(url);
-    } catch (err) {
-      console.error("Alarm set failed:", err);
-    }
   };
 
   const offAlarm = async () => {
-    setSavedAlarm(null); // Clear the active alarm card from UI
-    
-    // 🔥 FIX: Because your backend automatically turns the LED back ON 
-    // with your original background color when dismissed, update React's state:
-    setIsOn(true); 
-
-    try {
-      await fetch(`${ESP32_BASE_URL}/alarm/off`);
-    } catch (err) {
-      console.error("Alarm kill failed:", err);
-    }
+    setSavedAlarm(null);
+    setIsOn(true);
+    await update(ref(db, "led/alarm"), { enabled: false });
   };
 
   const openAlarmDialog = () => {
     if (savedAlarm) {
-      setHour(savedAlarm.hour);
-      setMinute(savedAlarm.minute);
-      setPeriod(savedAlarm.period);
-      setScheduledColor(savedAlarm.color);
-      setAlarmAnimation(savedAlarm.animation);
+      setHour(savedAlarm.hour); setMinute(savedAlarm.minute); setPeriod(savedAlarm.period);
+      setScheduledColor(savedAlarm.color); setAlarmAnimation(savedAlarm.animation);
     }
     setAlarmDialogOpen(true);
   };
 
   const startTimer = async () => {
-    const h = Number(timerHour);
-    const m = Number(timerMinute);
-    const s = Number(timerSecond);
-
-    const totalSeconds = h * 3600 + m * 60 + s;
+    const totalSeconds = Number(timerHour) * 3600 + Number(timerMinute) * 60 + Number(timerSecond);
     if (totalSeconds <= 0) return;
 
     const r = parseInt(timerColor.slice(1, 3), 16);
     const g = parseInt(timerColor.slice(3, 5), 16);
     const b = parseInt(timerColor.slice(5, 7), 16);
-
     const actionParam = timerLedAction ? "on" : "off";
 
-    const url = `${ESP32_BASE_URL}/timer?hour=${h}&min=${m}&second=${s}&action=${actionParam}&r=${r}&g=${g}&b=${b}${
-      timerAnimation ? `&animation=${timerAnimation}` : ""
-    }`;
-
-    // 🔥 FIX: Unified countdown view pipeline state initialization
     setTimerState("running");
     setTotalDuration(totalSeconds);
     setCountdown(totalSeconds);
-    
     setTimerDialogOpen(false);
 
-    try {
-      await fetch(url);
-    } catch (err) {
-      console.error("Timer set failed:", err);
-    }
+    await set(ref(db, "led/timer"), {
+      state: "running",
+      remainingSeconds: totalSeconds,
+      action: actionParam,
+      animation: timerAnimation,
+      timerColor: { r, g, b }
+    });
   };
 
   const pauseTimer = async () => {
-  setTimerPaused(true);
-  try {
-    await fetch(`${ESP32_BASE_URL}/timer/pause`);
-  } catch (err) {
-    console.error("Hardware pause sync failed:", err);
-  }
-};
-
-  const resumeTimer = async () => {
-  setTimerPaused(false);
-  try {
-    await fetch(`${ESP32_BASE_URL}/timer/resume?remaining=${countdown}`);
-  } catch (err) {
-    console.error("Hardware resume sync failed:", err);
-  }
-};
-
-  const cancelTimer = async () => {
-    setTimerState("idle");
-    setCountdown(null);
-    setTotalDuration(0);
-    setTimerPaused(false);
-    await fetch(`${ESP32_BASE_URL}/timer/cancel`);
+    setTimerPaused(true);
+    await update(ref(db, "led/timer"), { state: "paused" });
   };
 
-  const progress =
-    totalDuration > 0 && countdown !== null
-      ? ((totalDuration - countdown) / totalDuration) * 100
-      : 0;
-  // const isLocked = enableTimer;
+  const resumeTimer = async () => {
+    setTimerPaused(false);
+    await update(ref(db, "led/timer"), { state: "running", remainingSeconds: countdown });
+  };
+
+  const cancelTimer = async () => {
+    setTimerState("idle"); setCountdown(null); setTotalDuration(0); setTimerPaused(false);
+    await set(ref(db, "led/timer"), { state: "idle", remainingSeconds: 0, action: "on", animation: "blink" });
+  };
+
+  const progress = totalDuration > 0 && countdown !== null ? ((totalDuration - countdown) / totalDuration) * 100 : 0;
   const isTimerActive = showActive || showDone;
   const isAlarmActive = !!savedAlarm;
   const showButtons = !isTimerActive && !isAlarmActive;

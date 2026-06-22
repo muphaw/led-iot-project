@@ -12,7 +12,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyBWJbn078kC33F5UC3C-kFkcYDnMvyDIcU",
   authDomain: "led-iot-31edf.firebaseapp.com",
   databaseURL:
-    "https://led-iot-31edf-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "https://led-iot-31edf-default-rtdb.asia-southeast1.firebasedatabase.app/",
   projectId: "led-iot-31edf",
   storageBucket: "led-iot-31edf.firebasestorage.app",
   messagingSenderId: "1088683799201",

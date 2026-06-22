@@ -1,20 +1,26 @@
 // #include <WiFi.h>
-// #include <WebServer.h>
-// #include <DNSServer.h>
 // #include <WiFiManager.h>          
 // #include <FastLED.h>
+// #include <Firebase_ESP_Client.h> 
 // #include <arduinoFFT.h>
 // #include <time.h>
 
-// // ================= WEB SERVER =================
-// WebServer server(80);
+// // ================= FIREBASE INITIALIZATION =================
+// #define FIREBASE_HOST "led-iot-31edf-default-rtdb.asia-southeast1.firebasedatabase.app" 
+// #define FIREBASE_AUTH "AIzaSyBWJbn078kC33F5UC3C-kFkcYDnMvyDIcU"
+
+// FirebaseData fbdo;      
+// FirebaseData stream;    
+
+// FirebaseConfig config;
+// FirebaseAuth auth;
 
 // // ================= LED STRIP =================
 // #define LED_PIN 12
 // #define NUM_LEDS 8
 // #define PIR_PIN 14
 // #define SOUND_PIN 34
-// #define TRIGGER_PIN 0             // Physical BOOT button on ESP32
+// #define TRIGGER_PIN 0             
 
 // CRGB leds[NUM_LEDS];
 
@@ -22,12 +28,10 @@
 // bool motionEnabled = false;
 // bool musicMode = false;
 
-// // ================= COLOR =================
 // int currentR = 255;
 // int currentG = 0;
 // int currentB = 0;
 
-// // ================= PIR / FFT =================
 // int motionState = LOW;
 // unsigned long lastMotionTime = 0;
 // const unsigned long holdTime = 2000;
@@ -41,55 +45,46 @@
 // float displayLevel = 0;
 // float globalBrightness = 80;
 
-// // ================= TRANSITIONS =================
-// bool sunriseActive = false;
-// unsigned long sunriseStartTime = 0;
-// unsigned long sunriseDuration = 30000;
-
-// bool sunsetActive = false;
-// unsigned long sunsetStartTime = 0;
-// unsigned long sunsetDuration = 30000;
-
-// // =======================================================
-// // POMODORO TIMER ENGINE
-// // =======================================================
+// // ================= TIMERS & ANIMATIONS =================
 // bool timerActive = false;
 // bool timerPaused = false;
 // unsigned long timerEndTime = 0;
 // unsigned long pausedRemaining = 0;
-// String timerAnimation = "blink";
-// String currentTimerAction = "on"; // Tracks if timer turns light ON or OFF
+// unsigned long lastCountdownUpdate = 0;
+// String currentTimerAction = "on";
 
-// // ================= ALARM ENGINE =================
 // bool alarmEnabled = false;
 // bool alarmTriggered = false;
 // String alarmTime = "";
 // String alarmAnimation = "blink";
+// int alarmR = 255, alarmG = 150, alarmB = 0;
+// String alarmAction = "on";
 
-// // Animation status tracking
 // bool animationRunning = false;
 // String activeAnimationType = "";
 // unsigned long animationStartTime = 0;
+// unsigned long sunsetDuration = 30000;
 // uint8_t rainbowHue = 0;
 
-// int targetR = 255;
-// int targetG = 0;
-// int targetB = 0;
+// int targetR = 255, targetG = 0, targetB = 0;
 // String targetAnimation = "blink";
+// int backupR = 255, backupG = 255, backupB = 255;
 
-// int backupR = 255;
-// int backupG = 255;
-// int backupB = 255;
-
-// // ================= LED CORE FUNCTIONS =================
+// // ================= LED ENGINE CORE =================
 // void setLED(bool state) {
 //   ledState = state;
-//   FastLED.setBrightness(map(manualBrightness, 0, 100, 10, 255));
-
+//   int safeBrightness = (manualBrightness <= 0) ? 50 : manualBrightness;
+//   FastLED.setBrightness(map(safeBrightness, 0, 100, 10, 255));
+  
+//   Serial.print("[HARDWARE ENGINE] -> setLED called! State: ");
 //   if (state) {
-//     for (int i = 0; i < NUM_LEDS; i++) leds[i] = CRGB(currentR, currentG, currentB);
+//     Serial.printf("ON | Color: RGB(%d, %d, %d) | Brightness: %d%%\n", currentR, currentG, currentB, safeBrightness);
 //   } else {
-//     for (int i = 0; i < NUM_LEDS; i++) leds[i] = CRGB(0, 0, 0);
+//     Serial.println("OFF | Stripping colors to Black");
+//   }
+
+//   for (int i = 0; i < NUM_LEDS; i++) {
+//     leds[i] = state ? CRGB(currentR, currentG, currentB) : CRGB::Black;
 //   }
 //   FastLED.show();
 // }
@@ -102,7 +97,6 @@
 //   }
 // }
 
-// // ================= ANIMATION ENGINE =================
 // void startTriggerAnimation(String animType) {
 //   animationRunning = true;
 //   activeAnimationType = animType;
@@ -117,300 +111,153 @@
 
 // void runActiveAnimation() {
 //   if (!animationRunning) return;
-
-//   static float smoothBrightness = 0;
 //   int targetBrightness = map(manualBrightness, 0, 100, 10, 255);
-  
-//   // Skip smooth tracking on fade_out to avoid startup lag blinks
-//   if (activeAnimationType != "fade_out") {
-//     smoothBrightness += (targetBrightness - smoothBrightness) * 0.08;
-//   }
 
-//   // ================= FADE IN =================
 //   if (activeAnimationType == "fade") {
 //     float progress = (float)(millis() - animationStartTime) / 3000.0;
 //     progress = constrain(progress, 0.0, 1.0);
-//     float smoothProgress = pow(progress, 2.2);  
-
-//     FastLED.setBrightness(smoothProgress * smoothBrightness);
+//     FastLED.setBrightness(pow(progress, 2.2) * targetBrightness);
 //     for (int i = 0; i < NUM_LEDS; i++) leds[i] = CRGB(currentR, currentG, currentB);
 //     FastLED.show();
-
 //     if (progress >= 1.0) animationRunning = false;
 //   }
-  
-//   // ================= SLOW FADE OUT =================
 //   else if (activeAnimationType == "fade_out") {
 //     float progress = (float)(millis() - animationStartTime) / (float)sunsetDuration;
 //     progress = constrain(progress, 0.0, 1.0);
-    
-//     float smoothProgress = 1.0 - pow(progress, 2.2); 
-
-//     // Directly scale down from target hardware limits
-//     int currentFadeBrightness = smoothProgress * targetBrightness;
-//     FastLED.setBrightness(currentFadeBrightness);
-
-//     for (int i = 0; i < NUM_LEDS; i++) {
-//       leds[i] = CRGB(currentR, currentG, currentB);
-//     }
+//     FastLED.setBrightness((1.0 - pow(progress, 2.2)) * targetBrightness);
+//     for (int i = 0; i < NUM_LEDS; i++) leds[i] = CRGB(currentR, currentG, currentB);
 //     FastLED.show();
-
-//     if (progress >= 1.0) {
-//       animationRunning = false;
-//       setLED(false); 
-//     }
+//     if (progress >= 1.0) { animationRunning = false; setLED(false); }
 //   }
-
-//   // ================= BLINK =================
 //   else if (activeAnimationType == "blink") {
 //     bool toggle = ((millis() - animationStartTime) / 500) % 2 == 0;
-//     FastLED.setBrightness(smoothBrightness);
 //     for (int i = 0; i < NUM_LEDS; i++) leds[i] = toggle ? CRGB(currentR, currentG, currentB) : CRGB::Black;
 //     FastLED.show();
 //   }
-
-//   // ================= SMOOTH WAVE =================
-//   else if (activeAnimationType == "wave") {
-//     uint8_t timeShift = millis() / 15;  
-//     int baseBrightness = map(manualBrightness, 0, 100, 20, 255);
-//     FastLED.setBrightness(baseBrightness);
-//     for (int i = 0; i < NUM_LEDS; i++) {
-//       uint8_t wavePhase = i * 25 + timeShift;
-//       uint8_t w = sin8(wavePhase);
-//       float energy = w / 255.0;
-//       energy = sin(energy * PI);
-//       uint8_t brightness = energy * 255;
-//       leds[i] = CRGB(currentR, currentG, currentB);
-//       leds[i].fadeToBlackBy(255 - brightness);
-//     }
-//     FastLED.show();
-//   }
-
-//   // ================= RAINBOW =================
 //   else if (activeAnimationType == "rainbow") {
-//     FastLED.setBrightness(smoothBrightness);
 //     fill_rainbow(leds, NUM_LEDS, rainbowHue++, 25);
 //     FastLED.show();
 //   }
 // }
 
-// // ================= TIME / NTP SYNCHRONIZATION =================
-// void syncTime() {
-//   configTime(6 * 3600 + 1800, 0, "pool.ntp.org");
-//   struct tm timeinfo;
-//   if (getLocalTime(&timeinfo)) Serial.println("NTP Time Synced.");
-// }
-
-// // ================= CORS HEADERS FORMATION =================
-// void sendCORSHeaders() {
-//   server.sendHeader("Access-Control-Allow-Origin", "*");
-//   server.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-//   server.sendHeader("Access-Control-Allow-Headers", "*");
-// }
-
-// void handleRoot() { sendCORSHeaders(); server.send(200, "text/plain", "Lumen OS Bridge Online"); }
-// void handleOn() { sendCORSHeaders(); stopTriggerAnimation(); setLED(true); server.send(200, "text/plain", "LED ON"); }
-// void handleOff() { sendCORSHeaders(); stopTriggerAnimation(); setLED(false); server.send(200, "text/plain", "LED OFF"); }
-
-// void handleColor() {
-//   sendCORSHeaders();
-//   if (server.hasArg("r") && server.hasArg("g") && server.hasArg("b")) {
-//     setColor(server.arg("r").toInt(), server.arg("g").toInt(), server.arg("b").toInt());
-//     server.send(200, "text/plain", "Color Updated");
-//   } else {
-//     server.send(400, "text/plain", "Missing RGB Matrix Data");
-//   }
-// }
-
-// void handleMotionOn() { sendCORSHeaders(); motionEnabled = true; server.send(200, "text/plain", "PIR Enabled"); }
-// void handleMotionOff() { sendCORSHeaders(); motionEnabled = false; server.send(200, "text/plain", "PIR Disabled"); }
-// void handleMusicOn() { sendCORSHeaders(); musicMode = true; server.send(200, "text/plain", "FFT Mode ON"); }
-// void handleMusicOff() { sendCORSHeaders(); musicMode = false; setLED(false); server.send(200, "text/plain", "FFT Mode OFF"); }
-
-// // ================= LIVE POLLING STATE API =================
-// void handleTimerStatus() {
-//   sendCORSHeaders();
-
-//   long remainingMs = 0;
-//   String state = "idle";
-
-//   if (animationRunning) {
-//     state = "done";
-//   }
-//   else if (timerActive) {
-//     state = "running";
-//     if (timerPaused)
-//       remainingMs = pausedRemaining;
-//     else
-//       remainingMs = max(0L, (long)(timerEndTime - millis()));
+// // ================= STREAM CALLBACK ENGINE =================
+// void streamCallback(FirebaseStream data) {
+//   String path = data.dataPath();
+  
+//   // Clean off leading slash to keep string evaluations clean and straightforward
+//   if (path.startsWith("/")) {
+//     path = path.substring(1);
 //   }
 
-//   long remainingSeconds = (remainingMs + 999) / 1000;
+//   Serial.println("\n--- [STREAM DATA EVENT INTERCEPTED] ---");
+//   Serial.print("Normalized Path: "); Serial.println(path);
+//   Serial.print("Data Payload Type: "); Serial.println(data.dataType());
 
-//   String json = "{";
-//   json += "\"state\":\"" + state + "\",";
-//   json += "\"remainingSeconds\":" + String(remainingSeconds) + ",";
-//   json += "\"activeAnimation\":\"" + activeAnimationType + "\"";
-//   json += "}";
+//   // Handle Full JSON Structure Updates
+//   if (data.dataType() == "json") {
+//     FirebaseJson *json = data.jsonObjectPtr();
+//     FirebaseJsonData jsonData;
 
-//   server.send(200, "application/json", json);
-// }
+//     if (json->get(jsonData, "device_state/isOn")) ledState = jsonData.boolValue;
+//     if (json->get(jsonData, "device_state/brightness")) manualBrightness = jsonData.intValue;
+//     if (json->get(jsonData, "device_state/color/r")) currentR = jsonData.intValue;
+//     if (json->get(jsonData, "device_state/color/g")) currentG = jsonData.intValue;
+//     if (json->get(jsonData, "device_state/color/b")) currentB = jsonData.intValue;
+//     if (json->get(jsonData, "device_state/sensors/motionEnabled")) motionEnabled = jsonData.boolValue;
+//     if (json->get(jsonData, "device_state/sensors/musicEnabled")) musicMode = jsonData.boolValue;
 
-// // ================= TIMER CONTROLS =================
-// void handleStartTimer() {
-//   sendCORSHeaders();
+//     Serial.print("-> Initial Sync Complete. Power Level: ");
+//     Serial.println(ledState ? "ON" : "OFF");
 
-//   long h = server.hasArg("hour") ? server.arg("hour").toInt() : 0;
-//   long m = server.hasArg("min") ? server.arg("min").toInt() : 0;
-//   long s = server.hasArg("second") ? server.arg("second").toInt() : 0;
-//   long totalSeconds = h * 3600 + m * 60 + s;
-
-//   if (totalSeconds <= 0) {
-//     server.send(400, "text/plain", "Invalid Timer Duration");
+//     setLED(ledState);
+//     Serial.println("----------------------------------------\n");
 //     return;
 //   }
 
-//   currentTimerAction = server.hasArg("action") ? server.arg("action") : "on";
-
-//   if (ledState) {
-//     backupR = currentR;
-//     backupG = currentG;
-//     backupB = currentB;
+//   // Handle Single Value Changes from React Client Sets
+//   if (path == "device_state/isOn") {
+//     bool newState = data.boolData();
+//     Serial.print("-> Power State Changed: "); Serial.println(newState ? "ON" : "OFF");
+//     setLED(newState);
 //   }
-
-//   if (server.hasArg("r")) targetR = server.arg("r").toInt();
-//   if (server.hasArg("g")) targetG = server.arg("g").toInt();
-//   if (server.hasArg("b")) targetB = server.arg("b").toInt();
-//   targetAnimation = server.hasArg("animation") ? server.arg("animation") : "blink";
-
-//   timerEndTime = millis() + (totalSeconds * 1000UL);
-//   timerActive = true;
-//   timerPaused = false;
-//   pausedRemaining = 0;
-  
-//   stopTriggerAnimation(); 
-
-//   // Start dimming immediately across the length of the countdown window
-//   if (currentTimerAction == "off") {
-//     sunsetDuration = totalSeconds * 1000UL; 
-//     startTriggerAnimation("fade_out");
+//   else if (path == "device_state/brightness") {
+//     manualBrightness = data.intData();
+//     FastLED.setBrightness(map(manualBrightness, 0, 100, 10, 255));
+//     FastLED.show();
+//     Serial.print("-> Brightness Level Updated: "); Serial.println(manualBrightness);
 //   }
-
-//   server.send(200, "text/plain", "Timer Initiated");
-// }
-
-// void handlePauseTimer() {
-//   sendCORSHeaders();
-//   if (!timerActive || timerPaused) { server.send(400, "text/plain", "Timer not running"); return; }
-  
-//   pausedRemaining = timerEndTime - millis();
-//   timerPaused = true;
-
-//   // 🔥 FIX: Pause the fading engine calculation loop immediately
-//   if (currentTimerAction == "off") {
-//     animationRunning = false; 
+//   else if (path.startsWith("device_state/color")) {
+//     if (path == "device_state/color") {
+//       FirebaseJson json = data.jsonObject();
+//       FirebaseJsonData r, g, b;
+//       json.get(r, "r"); json.get(g, "g"); json.get(b, "b");
+//       currentR = r.intValue; currentG = g.intValue; currentB = b.intValue;
+//     } else if (path == "device_state/color/r") { currentR = data.intData(); }
+//     else if (path == "device_state/color/g") { currentG = data.intData(); }
+//     else if (path == "device_state/color/b") { currentB = data.intData(); }
+    
+//     Serial.printf("-> Active Color Vector Set: RGB(%d, %d, %d)\n", currentR, currentG, currentB);
+//     if (ledState) setLED(true);
 //   }
-//   server.send(200, "text/plain", "Paused");
-// }
-
-// void handleResumeTimer() {
-//   sendCORSHeaders();
-//   if (!timerActive || !timerPaused) { server.send(400, "text/plain", "Timer not paused"); return; }
-
-//   // 🔥 FIX: Extract structural parameter payload directly from the React payload URL
-//   if (server.hasArg("remaining")) {
-//     long remainingSeconds = server.arg("remaining").toInt();
-//     pausedRemaining = remainingSeconds * 1000UL;
+//   else if (path == "device_state/sensors/motionEnabled") {
+//     motionEnabled = data.boolData();
+//     Serial.print("-> Motion Tracking: "); Serial.println(motionEnabled ? "ENABLED" : "DISABLED");
 //   }
-
-//   timerEndTime = millis() + pausedRemaining;
-//   timerPaused = false;
-
-//   // 🔥 FIX: Re-align fade-out visual parameters matching the new time window
-//   if (currentTimerAction == "off") {
-//     sunsetDuration = pausedRemaining; 
-//     animationStartTime = millis();    
-//     animationRunning = true;
+//   else if (path == "device_state/sensors/musicEnabled") {
+//     musicMode = data.boolData();
+//     Serial.print("-> Music Mode Sync: "); Serial.println(musicMode ? "ENABLED" : "DISABLED");
+//     if (!musicMode) setLED(false);
 //   }
-
-//   server.send(200, "text/plain", "Resumed");
-// }
-
-// void handleCancelTimer() {
-//   sendCORSHeaders();
-
-//   timerActive = false;
-//   timerPaused = false;
-//   pausedRemaining = 0;
-//   stopTriggerAnimation();
-
-//   // Bring the safe room environment light back alive instantly
-//   currentR = backupR;
-//   currentG = backupG;
-//   currentB = backupB;
-//   setLED(true);
-
-//   server.send(200, "text/plain", "Canceled");
-// }
-
-// // ================= ALARM CONTROLS =================
-// void handleAlarm() {
-//   sendCORSHeaders();
-//   if (!server.hasArg("time") || !server.hasArg("r") || !server.hasArg("g") || !server.hasArg("b")) {
-//     server.send(400, "text/plain", "Missing parameters");
-//     return;
+//   else if (path == "timer/state") {
+//     String state = data.stringData();
+//     if (state == "running") {
+//       if (timerPaused) {
+//         timerEndTime = millis() + pausedRemaining;
+//         timerPaused = false;
+//       } else {
+//         timerActive = true; timerPaused = false;
+//       }
+//     } else if (state == "paused") {
+//       timerPaused = true;
+//       pausedRemaining = timerEndTime - millis();
+//     } else if (state == "idle") {
+//       timerActive = false; timerPaused = false;
+//     }
+//   }
+//   else if (path == "timer/remainingSeconds" && !timerActive) {
+//     pausedRemaining = data.intData() * 1000UL;
+//     timerEndTime = millis() + pausedRemaining;
 //   }
   
-//   alarmTime = server.arg("time"); 
-//   String action = server.hasArg("action") ? server.arg("action") : "on";
+//   Serial.println("----------------------------------------\n");
+// }
 
-//   if (server.hasArg("r")) targetR = server.arg("r").toInt();
-//   if (server.hasArg("g")) targetG = server.arg("g").toInt();
-//   if (server.hasArg("b")) targetB = server.arg("b").toInt();
+// void streamTimeoutCallback(bool timeout) {
+//   if (timeout) Serial.println("Stream timeout occurred, adjusting reconnect loops...");
+// }
+
+// void checkAlarmTime(struct tm* timeinfo) {
+//   char currentFormatted[6];
+//   sprintf(currentFormatted, "%02d:%02d", timeinfo->tm_hour, timeinfo->tm_min);
   
-//   if (action == "off") {
-//     alarmAnimation = "fade_out";
-//     sunsetDuration = 10000; 
-//   } else {
-//     alarmAnimation = server.hasArg("animation") ? server.arg("animation") : "fade";
+//   if (alarmTime == String(currentFormatted)) {
+//     alarmTriggered = true;
+//     if (alarmAction == "off") {
+//       sunsetDuration = 10000;
+//       startTriggerAnimation("fade_out");
+//     } else {
+//       currentR = alarmR; currentG = alarmG; currentB = alarmB;
+//       setColor(currentR, currentG, currentB);
+//       startTriggerAnimation(alarmAnimation);
+//     }
 //   }
-  
-//   alarmEnabled = true;
-//   alarmTriggered = false;
-//   server.send(200, "text/plain", "Alarm Registered");
 // }
 
-// void handleCancelAlarm() {
-//   sendCORSHeaders();
-//   alarmTriggered = false;
-//   alarmEnabled = false;
-//   animationRunning = false;
-//   activeAnimationType = "";
-
-//   currentR = backupR;
-//   currentG = backupG;
-//   currentB = backupB;
-//   setLED(true);
-//   server.send(200, "text/plain", "Alarm Canceled");
-// }
-
-// void handleWiFiReset() {
-//   sendCORSHeaders();
-//   server.send(200, "text/plain", "Wi-Fi wiped. Hard rebooting...");
-//   delay(1000);
-//   WiFiManager wm;
-//   wm.resetSettings();
-//   ESP.restart();
-// }
-
-// // ================= FFT AUDIO PROCESSING =================
 // void readAudioFFT() {
 //   for (int i = 0; i < SAMPLES; i++) {
-//     vReal[i] = analogRead(SOUND_PIN);
-//     vImag[i] = 0;
+//     vReal[i] = analogRead(SOUND_PIN); vImag[i] = 0;
 //     delayMicroseconds(180);
 //   }
-
 //   FFT.windowing(FFTWindow::Hamming, FFTDirection::Forward);
 //   FFT.compute(FFTDirection::Forward);
 //   FFT.complexToMagnitude();
@@ -421,12 +268,10 @@
 //   for (int i = 40; i < 80; i++) treble += vReal[i];
 
 //   bass /= 8; mid /= 30; treble /= 40;
-
 //   int level = map(bass + mid + treble, 0, 2000, 0, NUM_LEDS);
 //   level = constrain(level, 0, NUM_LEDS);
 
-//   if (level > displayLevel) displayLevel += 0.6;
-//   else displayLevel -= 0.25;
+//   if (level > displayLevel) displayLevel += 0.6; else displayLevel -= 0.25;
 //   displayLevel = constrain(displayLevel, 0, NUM_LEDS);
 
 //   float targetBrightness = 50 + (bass * 0.05 + mid * 0.03 + treble * 0.02);
@@ -434,7 +279,6 @@
 //   globalBrightness = constrain(globalBrightness, 20, 140);
 
 //   FastLED.setBrightness((int)globalBrightness);
-
 //   for (int i = 0; i < NUM_LEDS; i++) {
 //     CRGB color = (i < 2) ? CRGB(0, 180, 180) : (i < 4) ? CRGB(0, 255, 0) : (i < 6) ? CRGB(255, 200, 0) : CRGB(255, 60, 0);
 //     leds[i] = (i < (int)displayLevel) ? color : CRGB::Black;
@@ -442,114 +286,86 @@
 //   FastLED.show();
 // }
 
-// void handleBrightness() {
-//   sendCORSHeaders();
-//   if (server.hasArg("value")) {
-//     manualBrightness = constrain(server.arg("value").toInt(), 0, 100);
-//     FastLED.setBrightness(map(manualBrightness, 0, 100, 10, 255));
-//     FastLED.show();
-//     server.send(200, "text/plain", "Brightness Updated");
-//   } else {
-//     server.send(400, "text/plain", "Missing value");
-//   }
-// }
-
-// void checkAlarmTime(struct tm* timeinfo) {
-//   char currentFormatted[9];
-//   sprintf(currentFormatted, "%02d:%02d", timeinfo->tm_hour, timeinfo->tm_min);
-  
-//   if (alarmTime == String(currentFormatted)) {
-//     Serial.println("ALARM TRIGGERED ✅");
-//     alarmTriggered = true;
-//     backupR = currentR; backupG = currentG; backupB = currentB;
-
-//     if (alarmAnimation == "fade_out") {
-//       stopTriggerAnimation();
-//       startTriggerAnimation("fade_out");
-//     } else {
-//       currentR = targetR; currentG = targetG; currentB = targetB;
-//       stopTriggerAnimation();
-//       setColor(currentR, currentG, currentB);
-//       delay(50); 
-//       startTriggerAnimation(alarmAnimation);
-//       if (alarmAnimation == "" || alarmAnimation == "none") setLED(true);
-//     }
-//   }
-// }
-
-// // ================= SETUP =================
 // void setup() {
 //   Serial.begin(115200);
+  
+//   fbdo.clear();
+//   stream.clear();
+  
 //   pinMode(PIR_PIN, INPUT);
 //   pinMode(TRIGGER_PIN, INPUT_PULLUP);
 
 //   FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
-//   FastLED.setBrightness(50);
-//   fill_solid(leds, NUM_LEDS, CRGB::Black);
-//   FastLED.show();
+//   setLED(false);
 
 //   WiFiManager wm;
-//   wm.setConfigPortalTimeout(180); 
-//   if (!wm.autoConnect("ESP32_Config_AP")) { delay(3000); ESP.restart(); }
+//   wm.autoConnect("ESP32_Config_AP");
 
-//   Serial.print("Assigned Node IP: ");
-//   Serial.println(WiFi.localIP());
-//   syncTime();
+//   configTime(6 * 3600 + 1800, 0, "pool.ntp.org");
 
-//   server.on("/", handleRoot);
-//   server.on("/on", handleOn);
-//   server.on("/off", handleOff);
-//   server.on("/color", handleColor);
-//   server.on("/motion/on", handleMotionOn);
-//   server.on("/motion/off", handleMotionOff);
-//   server.on("/music/on", handleMusicOn);
-//   server.on("/music/off", handleMusicOff);
-//   server.on("/brightness", handleBrightness);
-//   server.on("/wifi/reset", handleWiFiReset);
-//   server.on("/timer", handleStartTimer);             
-//   server.on("/timer/pause", handlePauseTimer);       
-//   server.on("/timer/resume", handleResumeTimer);     
-//   server.on("/timer/cancel", handleCancelTimer);     
-//   server.on("/timer/status", handleTimerStatus);     
-//   server.on("/alarm", handleAlarm);                  
-//   server.on("/alarm/off", handleCancelAlarm);        
-//   server.begin();
+//   // Re-establishing configurations
+//   config.api_key = FIREBASE_AUTH;
+//   config.database_url = FIREBASE_HOST;
+
+//   // Sign in anonymously to clear credentials engine mapping completely
+//   auth.user.email = "";
+//   auth.user.password = "";
+
+//   Firebase.begin(&config, &auth);
+//   Firebase.reconnectWiFi(true);
+
+//   Serial.println("Establishing Firebase Realtime Database stream...");
+  
+//   // 🔥 FIX: Listen to "/led" folder instead of dropping down to device_state directly
+//   if (!Firebase.RTDB.beginStream(&stream, "/led")) {
+//     Serial.println("❌ Stream connection error: " + stream.errorReason());
+//   } else {
+//     Serial.println("✅ Firebase Stream Connected Successfully! Listening for changes...");
+//   }
+
+//   Serial.println("🔥 Testing Firebase connection...");
+//   if (Firebase.RTDB.setBool(&fbdo, "/led/test", true)) {
+//     Serial.println("✅ Write test OK");
+//   } else {
+//     Serial.println("❌ Write test FAILED");
+//     Serial.println(fbdo.errorReason());
+//   }
+
+//   Firebase.RTDB.setStreamCallback(&stream, streamCallback, streamTimeoutCallback);
 // }
 
-// // ================= MAIN RUNTIME LOOP =================
 // void loop() {
-//   server.handleClient();
-  
-//   if (animationRunning && !timerPaused) {
-//     runActiveAnimation();
-//   }
+//   if (animationRunning && !timerPaused) runActiveAnimation();
 
 //   if (digitalRead(TRIGGER_PIN) == LOW) {
 //     delay(50);
-//     if (digitalRead(TRIGGER_PIN) == LOW) handleWiFiReset();
+//     if (digitalRead(TRIGGER_PIN) == LOW) { WiFiManager wm; wm.resetSettings(); ESP.restart(); }
 //   }
 
-//   // PIR sensor loop checking block (Ignores loops while countdown runs)
-//   if (motionEnabled && !animationRunning && !timerActive) {
+//   if (motionEnabled && !ledState && !animationRunning && !timerActive) {
 //     motionState = digitalRead(PIR_PIN);
 //     if (motionState == HIGH) { lastMotionTime = millis(); setLED(true); }
-//     if (millis() - lastMotionTime > holdTime) setLED(false);
+//     if (ledState && (millis() - lastMotionTime > holdTime)) setLED(false);
 //   }
 
 //   if (timerActive && !timerPaused) {
 //     if (millis() >= timerEndTime) {
 //       timerActive = false;
-//       pausedRemaining = 0;
+//       Firebase.RTDB.setString(&fbdo, "/led/timer/state", "idle");
+//       Firebase.RTDB.setInt(&fbdo, "/led/timer/remainingSeconds", 0);
 
 //       if (currentTimerAction == "off") {
-//         stopTriggerAnimation();
-//         setLED(false); // Snap perfectly down to 0 remaining emissions 
+//         stopTriggerAnimation(); setLED(false);
 //       } else {
 //         currentR = targetR; currentG = targetG; currentB = targetB;
-//         timerAnimation = targetAnimation;
 //         setColor(currentR, currentG, currentB);
-//         startTriggerAnimation(timerAnimation);
+//         startTriggerAnimation(targetAnimation);
 //       }
+//     } 
+//     else if (millis() - lastCountdownUpdate >= 1000) {
+//       lastCountdownUpdate = millis();
+//       long secLeft = (timerEndTime - millis()) / 1000;
+//       Firebase.RTDB.setInt(&fbdo, "/led/timer/remainingSeconds", max(0L, secLeft));
 //     }
 //   }
 
@@ -558,7 +374,5 @@
 //     if (getLocalTime(&timeinfo)) checkAlarmTime(&timeinfo);
 //   }
 
-//   if (musicMode && !animationRunning && !timerActive) {
-//     readAudioFFT();
-//   }
+//   if (musicMode && !animationRunning && !timerActive) readAudioFFT();
 // }
