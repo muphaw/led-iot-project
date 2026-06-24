@@ -1,12 +1,13 @@
-import Manual from "@/pages/Home";
+// import Manual from "@/pages/Home";
+import LedController from "@/pages/Home";
 import { createBrowserRouter } from "react-router-dom";
 
-
 const router = createBrowserRouter([
-    {
-        path : '/',
-        element : <Manual/>
-    }
-])
+  {
+    path: "/",
+    // element : <Manual/>
+    element: <LedController />,
+  },
+]);
 
-export default router
+export default router;
