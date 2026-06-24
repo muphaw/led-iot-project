@@ -1,47 +1,50 @@
-// #include <Arduino.h>
 // #include <WiFi.h>
-// #include <WebServer.h>
-// #include <DNSServer.h>
+// #include <WiFiClientSecure.h>
+// #include <PubSubClient.h>
 // #include <WiFiManager.h>
-// #include <Firebase_ESP_Client.h>
 
-// // Helper headers for token generation and formatting
-// #include "addons/TokenHelper.h"
-// #include "addons/RTDBHelper.h"
-
-// // 1. Replace with your actual Web API Key from Firebase Project Settings
-// #define API_KEY "AIzaSyAo6MH0bU54zHZ3G6F8L6pyBIMs5C7ulrg"
-// #define DATABASE_URL "https://smart-led-91252-default-rtdb.asia-southeast1.firebasedatabase.app"
+// // ⚠️ PASTE YOUR HIVEMQ DETAILS HERE (Do not include "wss://" or ports here)
+// const char* mqtt_server = "2994cdeb69fe41b5962ac977c7ccb5cc.s1.eu.hivemq.cloud";
+// const int mqtt_port = 8883;                            // Secure TLS Port for ESP32
+// const char* mqtt_user = "smartled";               // The username you created in Authentication
+// const char* mqtt_pass = "12345Abcde";               // The password you created in Authentication
+// const char* topic = "home/led/control";
 
 // const int RED_LED_PIN = 12;
 
-// FirebaseData streamData; // Dedicated Data object for the persistent stream
-// FirebaseAuth auth;
-// FirebaseConfig config;
+// WiFiClientSecure espClient;
+// PubSubClient client(espClient);
 
-// // Callback function: Runs automatically ONLY when the React app updates the value in Firebase
-// void streamCallback(FirebaseStream data) {
-//   Serial.printf("Stream Data Available... Path: %s, Data: %s\n", data.streamPath().c_str(), data.dataPath().c_str());
+// void callback(char* topic, byte* payload, unsigned int length) {
+//   Serial.print("Message arrived on topic: ");
+//   Serial.println(topic);
 
-//   if (data.dataType() == "int") {
-//     int ledState = data.intData();
-//     if (ledState == 1) {
+//   if (length > 0) {
+//     char status = (char)payload[0];
+//     if (status == '1') {
 //       digitalWrite(RED_LED_PIN, HIGH);
-//       Serial.println("🔴 Red LED Status Changed: ON");
-//     } else {
+//       Serial.println("🔴 LED: ON");
+//     } else if (status == '0') {
 //       digitalWrite(RED_LED_PIN, LOW);
-//       Serial.println("⚪ Red LED Status Changed: OFF");
+//       Serial.println("⚪ LED: OFF");
 //     }
 //   }
 // }
 
-// // Optional callback to catch stream timeout/network dropouts
-// void streamTimeoutCallback(bool timeout) {
-//   if (timeout) {
-//     Serial.println("Stream timed out, resuming connection...");
-//   }
-//   if (!streamData.httpConnected()) {
-//     Serial.printf("Stream error code: %d, reason: %s\n", streamData.httpCode(), streamData.errorReason().c_str());
+// void reconnect() {
+//   while (!client.connected()) {
+//     Serial.print("Attempting MQTT cloud connection...");
+//     String clientId = "ESP32Client-" + String(random(0, 0xffff), HEX);
+
+//     if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass)) {
+//       Serial.println("🟢 Connected to HiveMQ Cloud!");
+//       client.subscribe(topic);
+//     } else {
+//       Serial.print("Failed, rc=");
+//       Serial.print(client.state());
+//       Serial.println(" trying again in 5 seconds");
+//       delay(5000);
+//     }
 //   }
 // }
 
@@ -50,45 +53,27 @@
 //   pinMode(RED_LED_PIN, OUTPUT);
 //   digitalWrite(RED_LED_PIN, LOW);
 
-//   // Initialize WiFiManager
 //   WiFiManager wm;
-
-//   // Note: If you ever change home networks or need to clear credentials, uncomment the line below:
-//   // wm.resetSettings();
-
-//   Serial.println("Launching WiFiManager...");
-//   if(!wm.autoConnect("mini-firebase")) {
-//     Serial.println("Failed to connect to Wi-Fi. Restarting MCU...");
+//   if(!wm.autoConnect("ESP32_Config_AP")) {
 //     delay(3000);
 //     ESP.restart();
 //   }
+//   Serial.println("🎯 Wi-Fi Connected!");
 
-//   Serial.println("🎯 Wi-Fi Connected successfully!");
+//   // Bypasses local provider network blocks
+//   IPAddress google_DNS(8, 8, 8, 8);
+//   WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, google_DNS);
 
-//   // Assign Firebase configuration
-//   config.api_key = API_KEY;
-//   config.database_url = DATABASE_URL;
+//   // Skip strict certificate validation for an easier setup handshake
+//   espClient.setInsecure();
 
-//   // Sign up anonymously to bypass strict authentication rules during testing
-//   if (Firebase.signUp(&config, &auth, "", "")) {
-//     Serial.println("Firebase Anonymous Auth Success.");
-//   } else {
-//     Serial.printf("Auth Registration Error: %s\n", config.signer.signupError.message.c_str());
-//   }
-
-//   Firebase.begin(&config, &auth);
-//   Firebase.reconnectWiFi(true);
-
-//   // Open the active stream listener on the database path
-//   if (!Firebase.RTDB.beginStream(&streamData, "/iot_device/control_led")) {
-//     Serial.printf("Stream startup error: %s\n", streamData.errorReason().c_str());
-//   }
-
-//   // Bind the event handlers
-//   Firebase.RTDB.setStreamCallback(&streamData, streamCallback, streamTimeoutCallback);
+//   client.setServer(mqtt_server, mqtt_port);
+//   client.setCallback(callback);
 // }
 
 // void loop() {
-//   // The stream runs asynchronously in the background.
-//   // You can leave the main loop completely empty!
+//   if (!client.connected()) {
+//     reconnect();
+//   }
+//   client.loop();
 // }
