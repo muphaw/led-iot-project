@@ -27,7 +27,7 @@ const LedController: React.FC = () => {
 
     mqttClient.on("message", (topic, message) => {
       if (topic === TOPIC) {
-        setIsOn(message.toString() === "1");
+        setIsOn(message.toString() === "on");
       }
     });
 
@@ -43,14 +43,15 @@ const LedController: React.FC = () => {
   }, []);
 
   const handleToggle = () => {
-    if (!client || !connected) return;
+  if (!client || !connected) return;
 
-    const nextState = !isOn;
-    setIsOn(nextState);
+  const nextState = !isOn;
+  setIsOn(nextState);
 
-    const payload = nextState ? "1" : "0";
-    client.publish(TOPIC, payload, { qos: 1, retain: true });
-  };
+  // CHANGE THIS: Send "on" or "off" string literals instead of "1" or "0"
+  const payload = nextState ? "on" : "off"; 
+  client.publish(TOPIC, payload, { qos: 1, retain: true });
+};
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 font-sans">
