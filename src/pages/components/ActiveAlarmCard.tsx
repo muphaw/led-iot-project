@@ -4,7 +4,7 @@ import type { SavedAlarm } from "@/types/data.t";
 interface ActiveAlarmCardProps {
   savedAlarm: SavedAlarm;
   setAlarmDialogOpen: (open: boolean) => void;
-  offAlarm: () => Promise<void>;
+  offAlarm: () => void;
 }
 
 const ActiveAlarmCard: React.FC<ActiveAlarmCardProps> = ({
