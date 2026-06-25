@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Power, Volume2, Activity } from "lucide-react";
-import mqtt from "mqtt"; // Imported MQTT library
 import { hexToRgb } from "@/util/hex";
 import AlarmDialog from "@/components/AlarmDialog";
 import type { AlarmAnimation, SavedAlarm, TimerState } from "@/types/data.t";
@@ -13,50 +12,44 @@ import ActiveAlarmCard from "./components/ActiveAlarmCard";
 import ColorPickerPanel from "./components/ColorPickerPanel";
 import SensorToggleCard from "./components/SensorToggleCard";
 
+// MQTT Client Configuration
+import mqtt from "mqtt";
+
+const MQTT_HOST = "wss://2994cdeb69fe41b5962ac977c7ccb5cc.s1.eu.hivemq.cloud:8884/mqtt";
+const MQTT_OPTIONS = {
+  username: "smartled",
+  password: "12345Abcde",
+  clientId: "react_dashboard_" + Math.random().toString(16).substring(2, 8),
+};
+
+const TOPIC = "home/led/control";
 const defaultColors = ["#FF0000", "#0000FF", "#FFFFFF"];
 
-// ================= HIVEMQ CONFIGURATION =================
-// ⚠️ PASTE YOUR HIVEMQ DETAILS HERE (Must start with wss:// and end with :8884/mqtt)
-const MQTT_HOST =
-  "wss://2994cdeb69fe41b5962ac977c7ccb5cc.s1.eu.hivemq.cloud:8884/mqtt";
-const MQTT_OPTIONS = {
-  username: "smartled", // Created in Authentication tab
-  password: "12345Abcde", // Created in Authentication tab
-  clientId: "react_lumen_os_" + Math.random().toString(16).substring(2, 8),
-};
-const TOPIC = "home/led/control";
-
 const Manual = () => {
+  // MQTT Client instance state
+  const [client, setClient] = useState<mqtt.MqttClient | null>(null);
+  const [connected, setConnected] = useState<boolean>(false);
+
   const [color, setColor] = useState("#FF0000");
   const [isOn, setIsOn] = useState(false);
   const [brightness, setBrightness] = useState(50);
-  const [mqttConnected, setMqttConnected] = useState(false);
-
-  // MQTT client persistent state reference
-  const mqttClientRef = useRef<mqtt.MqttClient | null>(null);
 
   const [scheduledColor, setScheduledColor] = useState("#FF0000");
   const [totalDuration, setTotalDuration] = useState<number>(0);
   const [period, setPeriod] = useState("AM");
   const [timerState, setTimerState] = useState<TimerState>("idle");
+
   const [hour, setHour] = useState("01");
   const [minute, setMinute] = useState("00");
   const [countdown, setCountdown] = useState<number | null>(null);
+
   const [timerColor, setTimerColor] = useState("#00FF00");
   const [timerLedAction, setTimerLedAction] = useState(true);
 
-  const hours = Array.from({ length: 12 }, (_, i) =>
-    String(i).padStart(2, "0"),
-  );
-  const alarmHours = Array.from({ length: 12 }, (_, i) =>
-    String(i + 1).padStart(2, "0"),
-  );
-  const minutes = Array.from({ length: 60 }, (_, i) =>
-    String(i).padStart(2, "0"),
-  );
-  const seconds = Array.from({ length: 60 }, (_, i) =>
-    String(i).padStart(2, "0"),
-  );
+  const hours = Array.from({ length: 12 }, (_, i) => String(i).padStart(2, "0"));
+  const alarmHours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
+  const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+  const seconds = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
 
   // Sensors
   const [motionEnabled, setMotionEnabled] = useState(false);
@@ -73,41 +66,71 @@ const Manual = () => {
 
   const showIdle = timerState === "idle";
   const showActive = timerState === "running";
+  const showDone = timerState === "done";
 
-  // ================= LIFE CYCLE: INITIALIZE MQTT =================
+  // 1. Core Lifecycle Engine: Initialize MQTT broker listener infrastructure
   useEffect(() => {
-    const client = mqtt.connect(MQTT_HOST, MQTT_OPTIONS);
+    const mqttClient = mqtt.connect(MQTT_HOST, MQTT_OPTIONS);
 
-    client.on("connect", () => {
-      console.log("🟢 Connected safely to HiveMQ Cloud via WebSockets!");
-      setMqttConnected(true);
+    mqttClient.on("connect", () => {
+      console.log("🟢 Connected to HiveMQ Cloud!");
+      setConnected(true);
+      mqttClient.subscribe(TOPIC);
     });
 
-    client.on("error", (err) => {
-      console.error("MQTT Connection Error: ", err);
+    mqttClient.on("message", (topic, msg) => {
+      if (topic !== TOPIC) return;
+      const message = msg.toString();
+
+      // State Feedback Matrix Sync
+      if (message === "on") {
+        setIsOn(true);
+      } else if (message === "off") {
+        setIsOn(false);
+      } else if (message.startsWith("brightness:")) {
+        const value = parseInt(message.substring(11), 10);
+        if (!isNaN(value)) setBrightness(value);
+      }
+
+      else if (message === "status:music") {
+        setMusicEnabled(true);
+        setMotionEnabled(false);
+        setIsOn(false);
+      }
+      else if (message === "status:motion") {
+        setMotionEnabled(true);
+        setMusicEnabled(false);
+        setIsOn(false);
+      }
+      else if (message === "status:idle") {
+        setMotionEnabled(false);
+        setMusicEnabled(false);
+        setIsOn(false);
+      }
     });
 
-    mqttClientRef.current = client;
+    mqttClient.on("error", (err) => {
+      console.error("MQTT Connection Exception:", err);
+    });
+
+    setClient(mqttClient);
 
     return () => {
-      if (mqttClientRef.current) {
-        mqttClientRef.current.end();
-      }
+      mqttClient.end();
     };
   }, []);
 
-  // Sync Color Outwards via MQTT
+  // 2. Sync Color Pipeline via MQTT Payloads
   useEffect(() => {
-    if (!isOn || !mqttConnected || !mqttClientRef.current) return;
+    if (!isOn || !client || !connected) return;
 
     const { r, g, b } = hexToRgb(color);
     const timeout = setTimeout(() => {
-      // Formats matching backend layout "color:r,g,b"
-      mqttClientRef.current?.publish(TOPIC, `color:${r},${g},${b}`, { qos: 1 });
+      client.publish(TOPIC, `color:${r},${g},${b}`, { qos: 1, retain: true });
     }, 80);
 
     return () => clearTimeout(timeout);
-  }, [color, isOn, mqttConnected]);
+  }, [color, isOn, client, connected]);
 
   // Timer Countdown Logic
   useEffect(() => {
@@ -128,50 +151,44 @@ const Manual = () => {
     return () => clearInterval(interval);
   }, [timerState, timerPaused]);
 
-  // Helper safety abstraction wrapper for publishing
-  const publishMessage = (payload: string) => {
-    if (mqttClientRef.current && mqttConnected) {
-      mqttClientRef.current.publish(TOPIC, payload, { qos: 1 });
-    } else {
-      console.warn("MQTT drop payload intercept: Client not connected.");
-    }
-  };
-
-  // ================= HARDWARE ROUTING CONVERSIONS =================
+  // 3. Refactored Hardware Link Actions (Optimized for MQTT)
   const toggleLED = () => {
-    const newState = !isOn;
-    setIsOn(newState);
-    publishMessage(newState ? "on" : "off");
-  };
+    if (!client || !connected) return;
+    const nextState = !isOn;
+    setIsOn(nextState);
 
-  const toggleMotionSensor = () => {
-    const newState = !motionEnabled;
-    setMotionEnabled(newState);
-    publishMessage(newState ? "motion/on" : "motion/off");
-  };
-
-  const togglemusicSensor = () => {
-    const newState = !musicEnabled;
-    setMusicEnabled(newState);
-    publishMessage(newState ? "music/on" : "music/off");
+    const payload = nextState ? "on" : "off";
+    client.publish(TOPIC, payload, { qos: 1, retain: true });
   };
 
   const updateBrightness = (value: number) => {
-    // Formats payload mapping string matching backend "brightness:value"
-    publishMessage(`brightness:${value}`);
+    if (!client || !connected) return;
+    setBrightness(value);
+    client.publish(TOPIC, `brightness:${value}`, { qos: 1, retain: true });
   };
 
-  const [alarmAnimation, setAlarmAnimation] = useState<AlarmAnimation>("fade");
-  const [alarmDialogOpen, setAlarmDialogOpen] = useState(false);
-  const [alarmLedAction, setAlarmLedAction] = useState(true);
-  const [savedAlarm, setSavedAlarm] = useState<SavedAlarm | null>(null);
+  const toggleMotionSensor = () => {
+    if (!client || !connected) return;
+    const newState = !motionEnabled;
+    setMotionEnabled(newState);
+    client.publish(TOPIC, `motion:${newState ? "on" : "off"}`, { qos: 1 });
+  };
+
+  const toggleMusicSensor = () => {
+    if (!client || !connected) return;
+    const newState = !musicEnabled;
+    setMusicEnabled(newState);
+    client.publish(TOPIC, newState ? "music:on" : "music:off", { qos: 1 });
+  };
 
   const startAlarm = () => {
+    if (!client || !connected) return;
     const time = formatAlarm(hour, minute, period);
+    const { r, g, b } = hexToRgb(scheduledColor);
     const actionParam = alarmLedAction ? "on" : "off";
 
-    // Build payload structure matching: "alarm:set|HH:MM|action"
-    publishMessage(`alarm:set|${time}|${actionParam}`);
+    const payload = `alarm:set,time:${time},action:${actionParam},r:${r},g:${g},b:${b},anim:${alarmAnimation}`;
+  client.publish(TOPIC, payload, { qos: 1 });
 
     setSavedAlarm({
       hour,
@@ -184,9 +201,50 @@ const Manual = () => {
   };
 
   const offAlarm = () => {
+    if (!client || !connected) return;
     setSavedAlarm(null);
-    setIsOn(true);
-    publishMessage("alarm/cancel");
+    client.publish(TOPIC, "alarm:off", { qos: 1 });
+  };
+
+  const startTimer = () => {
+    if (!client || !connected) return;
+    const h = Number(timerHour);
+    const m = Number(timerMinute);
+    const s = Number(timerSecond);
+    const totalSeconds = h * 3600 + m * 60 + s;
+    if (totalSeconds <= 0) return;
+
+    const { r, g, b } = hexToRgb(timerColor);
+    const actionParam = timerLedAction ? "on" : "off";
+
+    const payload = `timer:start,s:${totalSeconds},action:${actionParam},r:${r},g:${g},b:${b},anim:${timerAnimation}`;
+    client.publish(TOPIC, payload, { qos: 1 });
+
+    setTimerState("running");
+    setTotalDuration(totalSeconds);
+    setCountdown(totalSeconds);
+    setTimerDialogOpen(false);
+  };
+
+  const pauseTimer = () => {
+    if (!client || !connected) return;
+    setTimerPaused(true);
+    client.publish(TOPIC, "timer:pause", { qos: 1 });
+  };
+
+  const resumeTimer = () => {
+    if (!client || !connected) return;
+    setTimerPaused(false);
+    client.publish(TOPIC, `timer:resume,rem:${countdown}`, { qos: 1 });
+  };
+
+  const cancelTimer = () => {
+    if (!client || !connected) return;
+    setTimerState("idle");
+    setCountdown(null);
+    setTotalDuration(0);
+    setTimerPaused(false);
+    client.publish(TOPIC, "timer:cancel", { qos: 1 });
   };
 
   const openAlarmDialog = () => {
@@ -200,92 +258,43 @@ const Manual = () => {
     setAlarmDialogOpen(true);
   };
 
-  const startTimer = () => {
-    const h = Number(timerHour);
-    const m = Number(timerMinute);
-    const s = Number(timerSecond);
-    const totalSeconds = h * 3600 + m * 60 + s;
-    if (totalSeconds <= 0) return;
+  const [alarmAnimation, setAlarmAnimation] = useState<AlarmAnimation>("fade");
+  const [alarmDialogOpen, setAlarmDialogOpen] = useState(false);
+  const [alarmLedAction, setAlarmLedAction] = useState(true);
+  const [savedAlarm, setSavedAlarm] = useState<SavedAlarm | null>(null);
 
-    const actionParam = timerLedAction ? "off" : "on";
-
-    // Formats payload structure matching backend string loop hook layout:
-    // "timer:start|durationSeconds|action"
-    publishMessage(`timer:start|${totalSeconds}|${actionParam}`);
-
-    setTimerState("running");
-    setTotalDuration(totalSeconds);
-    setCountdown(totalSeconds);
-    setTimerDialogOpen(false);
-  };
-
-  const pauseTimer = () => {
-    setTimerPaused(true);
-    publishMessage("timer/pause");
-  };
-
-  const resumeTimer = () => {
-    setTimerPaused(false);
-    publishMessage("timer/resume");
-  };
-
-  const cancelTimer = () => {
-    setTimerState("idle");
-    setCountdown(null);
-    setTotalDuration(0);
-    setTimerPaused(false);
-    publishMessage("timer/cancel");
-  };
-
-  const progress =
-    totalDuration > 0 && countdown !== null
-      ? ((totalDuration - countdown) / totalDuration) * 100
-      : 0;
-  const isTimerActive = showActive || timerState === "done";
+  const progress = totalDuration > 0 && countdown !== null ? ((totalDuration - countdown) / totalDuration) * 100 : 0;
+  const isTimerActive = showActive || showDone;
   const isAlarmActive = !!savedAlarm;
   const showButtons = !isTimerActive && !isAlarmActive;
 
   return (
     <div className="w-full bg-[#0b0f19] text-slate-100 flex items-center justify-center">
       <div className="w-full min-h-screen max-w-lg bg-white/5 backdrop-blur-xl border border-white/10 p-5 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.4)] space-y-4">
-        {/* Connection Status Monitor Widget */}
+        
         <div className="flex justify-end">
-          <span
-            className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${mqttConnected ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"}`}
-          >
-            {mqttConnected ? "Cloud Stream Live" : "Broker Offline"}
+          <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-md border ${
+            connected ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+          }`}>
+            Broker: {connected ? "Connected" : "Linking..."}
           </span>
         </div>
 
         {savedAlarm ? (
-          <ActiveAlarmCard
-            savedAlarm={savedAlarm}
-            setAlarmDialogOpen={setAlarmDialogOpen}
-            offAlarm={offAlarm}
-          />
+          <ActiveAlarmCard savedAlarm={savedAlarm} setAlarmDialogOpen={setAlarmDialogOpen} offAlarm={offAlarm} />
         ) : showIdle ? (
           <>
             <div className="flex w-full h-full items-stretch">
               <div className="w-3/4 flex items-center justify-center">
-                <AdvancedLEDBulb
-                  isOn={isOn}
-                  brightness={brightness}
-                  color={color}
-                />
+                <AdvancedLEDBulb isOn={isOn} brightness={brightness} color={color} />
               </div>
-              <ColorPickerPanel
-                color={color}
-                setColor={setColor}
-                defaultColors={defaultColors}
-              />
+              <ColorPickerPanel color={color} setColor={setColor} defaultColors={defaultColors} />
             </div>
 
-            <div
-              className={`flex justify-center ${musicEnabled || motionEnabled ? "pointer-events-none opacity-50" : ""}`}
-            >
+            <div className={`flex justify-center ${!connected || musicEnabled || motionEnabled ? "pointer-events-none opacity-50" : ""}`}>
               <button
                 onClick={toggleLED}
-                disabled={musicEnabled || motionEnabled || !mqttConnected}
+                disabled={!connected || musicEnabled || motionEnabled}
                 className={`w-full py-2 rounded-2xl font-bold text-sm uppercase flex items-center justify-center gap-3 transition-all duration-300 shadow-lg border ${
                   isOn
                     ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-neutral-950 border-transparent shadow-emerald-500/20"
@@ -297,7 +306,7 @@ const Manual = () => {
               </button>
             </div>
 
-            <div className="bg-white/5 border border-white/5 py-2 px-4 rounded-2xl">
+            <div className={`bg-white/5 border border-white/5 py-2 px-4 rounded-2xl ${!connected && "opacity-40 pointer-events-none"}`}>
               <div className="flex justify-between text-xs font-bold text-gray-400">
                 <span className="flex items-center gap-2">Brightness</span>
                 <span className="text-white">{brightness}%</span>
@@ -307,12 +316,7 @@ const Manual = () => {
                 min={0}
                 max={100}
                 value={brightness}
-                disabled={!mqttConnected}
-                onChange={(e) => {
-                  const value = Number(e.target.value);
-                  setBrightness(value);
-                  updateBrightness(value);
-                }}
+                onChange={(e) => updateBrightness(Number(e.target.value))}
                 className="w-full accent-cyan-400 h-1 bg-neutral-900 rounded-lg appearance-none cursor-pointer"
               />
             </div>
@@ -320,7 +324,7 @@ const Manual = () => {
         ) : (
           <CircularTimer
             showActive={showActive}
-            showDone={timerState === "done"}
+            showDone={showDone}
             timerColor={timerColor}
             progress={progress}
             countdown={countdown}
@@ -333,17 +337,14 @@ const Manual = () => {
           />
         )}
 
-        {/* Automation Grid */}
-        <div
-          className={`grid grid-cols-1 sm:grid-cols-3 gap-2 ${isOn ? "pointer-events-none opacity-50" : ""}`}
-        >
+        <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2 ${(!connected || isOn) ? "pointer-events-none opacity-50" : ""}`}>
           <SensorToggleCard
             icon={Activity}
             iconColorClass="text-green-400"
             title="Motion Sensor"
             enabled={motionEnabled}
             onToggle={toggleMotionSensor}
-            disabled={musicEnabled || isOn || !mqttConnected}
+            disabled={!connected || musicEnabled || isOn}
             activeText="Motion sensor active: LED will respond to movement automatically."
             inactiveText="Enable motion detection to allow automatic lighting control."
             themeColorClass="green"
@@ -354,32 +355,23 @@ const Manual = () => {
             iconColorClass="text-blue-400"
             title="Acoustic Sensor"
             enabled={musicEnabled}
-            onToggle={togglemusicSensor}
-            disabled={motionEnabled || isOn || !mqttConnected}
+            onToggle={toggleMusicSensor}
+            disabled={!connected || motionEnabled || isOn}
             activeText="Active: Device state flips on physical acoustic spikes."
             inactiveText="Toggle matrix power loop via audio spikes."
             themeColorClass="blue"
           />
         </div>
 
-        {/* Action Triggers & Dialogs */}
         <div>
           <div className="flex gap-2">
             {showButtons && (
-              <button
-                onClick={() => setTimerDialogOpen(true)}
-                disabled={!mqttConnected}
-                className="px-4 py-2 rounded-xl bg-emerald-500 text-black disabled:opacity-50"
-              >
+              <button onClick={() => setTimerDialogOpen(true)} disabled={!connected} className="px-4 py-2 rounded-xl bg-emerald-500 text-black disabled:opacity-40">
                 Set Timer
               </button>
             )}
             {showButtons && (
-              <button
-                onClick={openAlarmDialog}
-                disabled={!mqttConnected}
-                className="px-4 py-2 rounded-xl bg-emerald-500 text-black disabled:opacity-50"
-              >
+              <button onClick={openAlarmDialog} disabled={!connected} className="px-4 py-2 rounded-xl bg-emerald-500 text-black disabled:opacity-40">
                 Set Alarm
               </button>
             )}
