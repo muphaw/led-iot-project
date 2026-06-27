@@ -4,25 +4,25 @@ export const animationOptions = [
   {
     value: "fade",
     label: "Fade On",
-    icon: "✨",
+    icon: "",
     desc: "Smooth brightness increase",
   },
   {
     value: "blink",
     label: "Blink",
-    icon: "⚡",
+    icon: "",
     desc: "Quick flashing effect",
   },
   {
     value: "rainbow",
     label: "Rainbow",
-    icon: "🌈",
+    icon: "",
     desc: "Color cycling effect",
   },
   {
     value: "wave",
     label: "Wave",
-    icon: "🌊",
+    icon: "",
     desc: "Flowing light movement",
   },
 ] satisfies AnimationOption[];

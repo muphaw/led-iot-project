@@ -33,7 +33,6 @@ function AdvancedLEDBulb({ isOn, color, brightness }: AdvancedLEDBulbProps) {
         }`}
         style={{ willChange: "transform" }}
       >
-        {/* Ambient Glow */}
         <div
           className="absolute w-64 h-64 rounded-full blur-[48px] -z-10 pointer-events-none"
           style={{
@@ -42,7 +41,6 @@ function AdvancedLEDBulb({ isOn, color, brightness }: AdvancedLEDBulbProps) {
           }}
         />
 
-        {/* Bulb */}
         <motion.div
           initial={false}
           animate={{
@@ -63,7 +61,6 @@ function AdvancedLEDBulb({ isOn, color, brightness }: AdvancedLEDBulbProps) {
                      items-center
                      overflow-hidden"
         >
-          {/* Light Fill */}
           <div
             className="absolute inset-0 rounded-t-[50px] rounded-b-[30px]"
             style={{
@@ -72,12 +69,9 @@ function AdvancedLEDBulb({ isOn, color, brightness }: AdvancedLEDBulbProps) {
             }}
           />
 
-          {/* Reflection */}
           <div className="absolute top-2 left-6 w-12 h-2 bg-white/20 rounded-full" />
 
           <div className="absolute top-4 left-4 w-3 h-14 bg-white/10 rounded-full" />
-
-          {/* LED Core */}
           <div className="relative flex-1 flex items-center justify-center w-full">
             <div
               className="w-2 h-14 rounded-full"
@@ -87,15 +81,11 @@ function AdvancedLEDBulb({ isOn, color, brightness }: AdvancedLEDBulbProps) {
               }}
             />
           </div>
-
-          {/* Diffuser */}
           <div className="absolute bottom-4 w-4/5 h-3 bg-white/5 border-t border-white/10" />
 
-          {/* Collar */}
           <div className="w-full h-3 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-900" />
         </motion.div>
 
-        {/* Screw */}
         <div className="w-14 flex flex-col items-center -mt-px">
           <div className="w-full h-3 bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-700 border-b border-zinc-800" />
           <div className="w-[92%] h-3 bg-gradient-to-r from-zinc-600 via-zinc-400 to-zinc-700 border-b border-zinc-800 -mt-px" />

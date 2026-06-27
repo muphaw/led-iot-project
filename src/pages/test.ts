@@ -6,7 +6,6 @@
 // #include <arduinoFFT.h>
 // #include <time.h>
 
-// // ================= MQTT CLOUD PLATFORM CONFIGURATION =================
 // const char* mqtt_server = "2994cdeb69fe41b5962ac977c7ccb5cc.s1.eu.hivemq.cloud";
 // const int mqtt_port = 8883;                         // Secure TLS Port
 // const char* mqtt_user = "smartled";                
@@ -16,12 +15,11 @@
 // WiFiClientSecure espClient;
 // PubSubClient client(espClient);
 
-// // ================= LED STRIP PINOUT MATRIX =================
 // #define LED_PIN 12
 // #define NUM_LEDS 8
 // #define PIR_PIN 14
 // #define SOUND_PIN 34
-// #define TRIGGER_PIN 0             // Physical BOOT button on ESP32
+// #define TRIGGER_PIN 0             // physical BOOT button on ESP32
 
 // CRGB leds[NUM_LEDS];
 
@@ -29,12 +27,12 @@
 // bool motionEnabled = false;
 // bool musicMode = false;
 
-// // ================= COLOR CHANNELS =================
+// // color
 // int currentR = 255;
 // int currentG = 0;
 // int currentB = 0;
 
-// // ================= PIR / FFT SENSORS =================
+// // sensor
 // int motionState = LOW;
 // unsigned long lastMotionTime = 0;
 // const unsigned long holdTime = 2000;
@@ -48,7 +46,7 @@
 // float displayLevel = 0;
 // float globalBrightness = 80;
 
-// // ================= TRANSITIONS =================
+// // transtions
 // bool sunriseActive = false;
 // unsigned long sunriseStartTime = 0;
 // unsigned long sunriseDuration = 30000;
@@ -57,7 +55,7 @@
 // unsigned long sunsetStartTime = 0;
 // unsigned long sunsetDuration = 30000;
 
-// // ================= TIMERS & ALARMS CONTROL BLOCKS =================
+// // timer and alarm control block
 // bool timerActive = false;
 // bool timerPaused = false;
 // bool timerTriggered = false; // Tracks if the alert is actively executing post-countdown
@@ -72,7 +70,6 @@
 // String alarmAnimation = "blink";
 // String currentAlarmAction = "on";
 
-// // Animation status tracking
 // bool animationRunning = false;
 // String activeAnimationType = "";
 // unsigned long animationStartTime = 0;
@@ -83,7 +80,6 @@
 // int targetB = 0;
 // String targetAnimation = "blink";
 
-// // Backups for state restoration snapshots
 // int backupR = 255;
 // int backupG = 255;
 // int backupB = 255;
@@ -91,7 +87,6 @@
 // bool backupMotionEnabled = false;
 // bool backupMusicMode = false;
 
-// // Forward Declarations
 // void setLED(bool state);
 // void setColor(int r, int g, int b);
 // void stopTriggerAnimation();
@@ -99,7 +94,6 @@
 // void handleWiFiReset();
 // void evaluateSystemState();
 
-// // ================= LED CORE FUNCTIONS =================
 // void setLED(bool state) {
 //   ledState = state;
 //   FastLED.setBrightness(map(manualBrightness, 0, 100, 10, 255));
@@ -120,7 +114,6 @@
 //   }
 // }
 
-// // ================= ANIMATION ENGINE =================
 // void startTriggerAnimation(String animType) {
 //   animationRunning = true;
 //   activeAnimationType = animType;
@@ -200,14 +193,12 @@
 //   }
 // }
 
-// // ================= TIME / NTP SYNCHRONIZATION =================
 // void syncTime() {
 //   configTime(6 * 3600 + 1800, 0, "pool.ntp.org");
 //   struct tm timeinfo;
 //   if (getLocalTime(&timeinfo)) Serial.println("NTP Time Synced.");
 // }
 
-// // ================= ROBUST ARGUMENT PARSER =================
 // String getSubArg(String msg, String key) {
 //   int keyIdx = msg.indexOf("," + key + ":");
 //   if (keyIdx == -1) {
@@ -225,11 +216,9 @@
 //   return msg.substring(startIdx, endIdx);
 // }
 
-// // ================= AUTOMATED STATE RESTORATION ENGINE =================
 // void evaluateSystemState() {
 //   stopTriggerAnimation();
 
-//   // Restore previous states
 //   ledState = backupLedState;
 //   motionEnabled = backupMotionEnabled;
 //   musicMode = backupMusicMode;
@@ -237,7 +226,6 @@
 //   currentG = backupG;
 //   currentB = backupB;
 
-//   // Reset flags
 //   timerActive = false;
 //   timerPaused = false;
 //   timerTriggered = false;
@@ -246,18 +234,13 @@
 
 //   FastLED.setBrightness(map(manualBrightness, 0, 100, 10, 255));
 
-//   // ===== FIXED SENSOR RESTORE =====
 //   if (musicMode) {
-
-//     // immediately resume music mode
 //     ledState = true;
 //     readAudioFFT();
 //     client.publish(topic, "status:music");
 //   }
 
 //   else if (motionEnabled) {
-
-//     // immediately re-check PIR state
 //     motionState = digitalRead(PIR_PIN);
 
 //     if (motionState == HIGH) {
@@ -271,8 +254,6 @@
 //   }
 
 //   else if (ledState) {
-
-//     // restore static color mode
 //     for (int i = 0; i < NUM_LEDS; i++) {
 //       leds[i] = CRGB(currentR, currentG, currentB);
 //     }
@@ -282,20 +263,18 @@
 //   }
 
 //   else {
-
 //     fill_solid(leds, NUM_LEDS, CRGB::Black);
 //     FastLED.show();
 //     client.publish(topic, "status:idle");
 //   }
 // }
 
-// // ================= CENTRAL MQTT CONTROL CALLBACK =================
 // void callback(char* topic, byte* payload, unsigned int length) {
 //   String message = "";
 //   for (unsigned int i = 0; i < length; i++) {
 //     message += (char)payload[i];
 //   }
-//   Serial.println("📥 MQTT Payload Received: " + message);
+//   Serial.println(" MQTT Payload Received: " + message);
 
 //   bool overrideActive = timerTriggered || alarmTriggered;
 
@@ -336,15 +315,12 @@
 //   else if (message == "music:on")    { if (!overrideActive) musicMode = true; }
 //   else if (message == "music:off")   { if (!overrideActive) { musicMode = false; setLED(false); } }
 
-//   // ================= POMODORO TIMER EXECUTION BLOCK =================
 //   else if (message.startsWith("timer:start")) {
 //     long totalSeconds = getSubArg(message, "s").toInt();
 //     if (totalSeconds <= 0) return;
 
 //     currentTimerAction = getSubArg(message, "action");
 //     if (currentTimerAction == "") currentTimerAction = "on";
-
-//     // 📸 PERSIST SYSTEM SNAPSHOT
 //     backupLedState = ledState;
 //     backupMotionEnabled = motionEnabled;
 //     backupMusicMode = musicMode;
@@ -394,8 +370,6 @@
 //   else if (message == "timer:cancel") {
 //     evaluateSystemState(); 
 //   }
-
-//   // ================= ALARM SCHEDULING MATRIX =================
 //   else if (message == "alarm:off") {
 //     evaluateSystemState(); 
 //   }
@@ -404,7 +378,6 @@
 //     currentAlarmAction = getSubArg(message, "action");
 //     if (currentAlarmAction == "") currentAlarmAction = "on";
 
-//     // 📸 PERSIST SYSTEM SNAPSHOT
 //     backupLedState = ledState;
 //     backupMotionEnabled = motionEnabled;
 //     backupMusicMode = musicMode;
@@ -431,15 +404,13 @@
 //     alarmTriggered = false;
 //   }
 // }
-
-// // ================= MQTT RECONNECTION WATCHDOG =================
 // void reconnect() {
 //   while (!client.connected()) {
 //     Serial.print("Connecting to HiveMQ Cloud instance...");
 //     String clientId = "ESP32-CoreBridge-" + String(random(0, 0xffff), HEX);
 
 //     if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass)) {
-//       Serial.println("🟢 Fully Synced with Broker!");
+//       Serial.println(" Fully Synced with Broker!");
 //       client.subscribe(topic);
 //     } else {
 //       Serial.print("Failed, rc=");
@@ -464,7 +435,7 @@
   
 //   if (alarmTime == String(currentFormatted)) {
 //     if (!alarmTriggered) {
-//       Serial.println("ALARM TIME MATCHED ✅");
+//       Serial.println("ALARM TIME MATCHED ");
 //       alarmTriggered = true;
       
 //       // Isolate peripheral behaviors immediately
@@ -484,7 +455,6 @@
 //         stopTriggerAnimation();
 //         ledState = true; 
         
-//         // Force initial frame to avoid flash delay
 //         for (int i = 0; i < NUM_LEDS; i++) leds[i] = CRGB(currentR, currentG, currentB);
 //         FastLED.show();
         
@@ -529,7 +499,6 @@
 //   FastLED.show();
 // }
 
-// // ================= RUNTIME SETUP INITIALIZATION =================
 // void setup() {
 //   Serial.begin(115200);
 //   pinMode(PIR_PIN, INPUT);
@@ -555,25 +524,18 @@
 //   syncTime();
 // }
 
-// // ================= PERIODIC MAIN LOOP =================
 // void loop() {
 //   if (!client.connected()) {
 //     reconnect();
 //   }
 //   client.loop();
-  
-//   // 1. Run Override Animation Engines (Blinks/Fades)
-//   if (animationRunning && !timerPaused) {
+//     if (animationRunning && !timerPaused) {
 //     runActiveAnimation();
 //   }
-
-//   // 2. Physical WiFi Reset Trigger check
 //   if (digitalRead(TRIGGER_PIN) == LOW) {
 //     delay(50);
 //     if (digitalRead(TRIGGER_PIN) == LOW) handleWiFiReset();
 //   }
-
-//   // 3. Sensor Execution Block (CLEANED UP & ISOLATED)
 //   bool processingOverrideAlert = timerTriggered || alarmTriggered;
 
 //   if (!processingOverrideAlert && !animationRunning) {
@@ -591,14 +553,10 @@
 //       }
 //     }
 //   }
-
-//   // 4. Countdown Timer Expiration Check Loop
 //   if (timerActive && !timerPaused && !timerTriggered) {
 //     if (millis() >= timerEndTime) {
 //       timerTriggered = true;
-      
-//       // Cut off sensors so they don't break the blue target frames
-//       motionEnabled = false;
+//             motionEnabled = false;
 //       musicMode = false;
 
 //       if (currentTimerAction == "off") {
@@ -612,7 +570,6 @@
 //         stopTriggerAnimation();
 //         ledState = true; 
         
-//         // Force frame array values directly before beginning render cycle
 //         for (int i = 0; i < NUM_LEDS; i++) leds[i] = CRGB(currentR, currentG, currentB);
 //         FastLED.show();
         
@@ -620,8 +577,6 @@
 //       }
 //     } 
 //   }
-
-//   // 5. Alarm Time Validation Engine Loop
 //   if (alarmEnabled && !alarmTriggered) {
 //     struct tm timeinfo;
 //     if (getLocalTime(&timeinfo)) checkAlarmTime(&timeinfo);

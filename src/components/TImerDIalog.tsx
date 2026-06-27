@@ -91,7 +91,6 @@ export default function TimerDialog({
           rounded-2xl
         "
       >
-        {/* HEADER */}
         <DialogHeader className="">
           <DialogTitle className="text-lg sm:text-xl font-semibold">
             Set Timer
@@ -102,9 +101,7 @@ export default function TimerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* ================= PICKER ================= */}
         <div className=" relative rounded-2xl bg-black/30 border border-white/10 overflow-hidden">
-          {/* Labels */}
           <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 z-10 flex">
             <div className="w-1/3 flex justify-end pr-4">
               <span className="text-[10px] sm:text-sm text-white/60">hr</span>
@@ -133,7 +130,6 @@ export default function TimerDialog({
             height={isMobile ? 160 : 200}
             itemHeight={isMobile ? 40 : 52}
           >
-            {/* HOURS */}
             <Picker.Column name="hour">
               {hours.map((h) => (
                 <Picker.Item key={h} value={h}>
@@ -152,7 +148,6 @@ export default function TimerDialog({
               ))}
             </Picker.Column>
 
-            {/* MINUTES */}
             <Picker.Column name="minute">
               {minutes.map((m) => (
                 <Picker.Item key={m} value={m}>
@@ -171,7 +166,6 @@ export default function TimerDialog({
               ))}
             </Picker.Column>
 
-            {/* SECONDS */}
             <Picker.Column name="second">
               {seconds.map((s) => (
                 <Picker.Item key={s} value={s}>
@@ -194,7 +188,6 @@ export default function TimerDialog({
 
         {isLedOn && (
           <>
-            {/* TOGGLE */}
             <div className="flex gap-4 items-center">
               <span>To make led:</span>
 
@@ -205,7 +198,7 @@ export default function TimerDialog({
                 }`}
               >
                 {timerLedAction ? "ON" : "OFF"}
-                
+
               </button>
             </div>
           </>
@@ -213,7 +206,6 @@ export default function TimerDialog({
 
         {showColorAndAnimation && (
           <>
-            {/* ================= COLOR ================= */}
             <div className="mt-2 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] sm:text-xs uppercase text-gray-400">
@@ -244,7 +236,6 @@ export default function TimerDialog({
               </div>
             </label>
 
-            {/* DEFAULT COLORS */}
             <div className="flex gap-2 justify-center">
               {["#ff0000", "#ffff00", "#00ff00", "#0000ff", "#ffffff"].map(
                 (c) => (
@@ -263,7 +254,6 @@ export default function TimerDialog({
               )}
             </div>
 
-            {/* ================= ANIMATION ================= */}
             <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
               {animationOptions.map((a) => (
                 <button
@@ -289,7 +279,6 @@ export default function TimerDialog({
           </>
         )}
 
-        {/* ================= FOOTER ================= */}
         <DialogFooter className="mt-2 flex flex-col-reverse sm:flex-row gap-2">
           <DialogClose asChild>
             <button className="w-full sm:w-auto px-3 py-2 rounded-xl bg-white/10 text-sm">

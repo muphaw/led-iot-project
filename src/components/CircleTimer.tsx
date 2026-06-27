@@ -14,10 +14,9 @@ export default function CircularTimer({
   resumeTimer,
   cancelTimer,
 }: any) {
-  // 🔥 BIGGER SIZE CONFIG
-  const size = 205; // was 208 (w-52), now bigger
+  const size = 205; 
   const center = size / 2;
-  const radius = 90; // bigger ring
+  const radius = 90; 
 
   const circumference = 2 * Math.PI * radius;
 
@@ -40,7 +39,6 @@ export default function CircularTimer({
   return (
     <>
       <div className="p-6 rounded-3xl bg-black/30 border border-white/10 shadow-xl space-y-6 transition-all">
-        {/* TOP */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
             <div
@@ -52,23 +50,18 @@ export default function CircularTimer({
             </span>
           </div>
         </div>
-
-        {/* TIMER CIRCLE */}
         <div className="flex items-center justify-center">
           <div className="relative" style={{ width: size, height: size }}>
-            {/* glow */}
             <div
               className="absolute inset-0 rounded-full blur-3xl opacity-30"
               style={{ backgroundColor: timerColor }}
             />
 
-            {/* SVG RING */}
             <svg
               width={size}
               height={size}
               className="-rotate-90 relative z-10"
             >
-              {/* background */}
               <circle
                 cx={center}
                 cy={center}
@@ -78,7 +71,6 @@ export default function CircularTimer({
                 fill="none"
               />
 
-              {/* progress */}
               <motion.circle
                 cx={center}
                 cy={center}
@@ -95,7 +87,6 @@ export default function CircularTimer({
               />
             </svg>
 
-            {/* COUNTDOWN */}
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-20">
               <div className="text-3xl font-bold text-white tracking-tight">
                 {formatTime(countdown ?? 0)}
@@ -105,13 +96,11 @@ export default function CircularTimer({
           </div>
         </div>
 
-        {/* INFO */}
         <div className="flex items-center justify-between text-xs text-gray-400">
           <span>Animation: none</span>
           <span>{timerPaused ? "Paused" : "Running"}</span>
         </div>
 
-        {/* ACTIONS */}
         <div className="flex gap-2 ">
           {timerState === "running" && !timerPaused ? (
             <button

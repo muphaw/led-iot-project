@@ -12,7 +12,6 @@ import ActiveAlarmCard from "./components/ActiveAlarmCard";
 import ColorPickerPanel from "./components/ColorPickerPanel";
 import SensorToggleCard from "./components/SensorToggleCard";
 
-// MQTT Client Configuration
 import mqtt from "mqtt";
 
 const MQTT_HOST = "wss://2994cdeb69fe41b5962ac977c7ccb5cc.s1.eu.hivemq.cloud:8884/mqtt";
@@ -26,7 +25,6 @@ const TOPIC = "home/led/control";
 const defaultColors = ["#FF0000", "#0000FF", "#FFFFFF"];
 
 const Manual = () => {
-  // MQTT Client instance state
   const [client, setClient] = useState<mqtt.MqttClient | null>(null);
   const [connected, setConnected] = useState<boolean>(false);
 
@@ -51,11 +49,9 @@ const Manual = () => {
   const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
   const seconds = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
 
-  // Sensors
   const [motionEnabled, setMotionEnabled] = useState(false);
   const [musicEnabled, setMusicEnabled] = useState(false);
 
-  // Timers
   const [timerHour, setTimerHour] = useState("00");
   const [timerMinute, setTimerMinute] = useState("00");
   const [timerSecond, setTimerSecond] = useState("00");
@@ -75,12 +71,10 @@ const Manual = () => {
   const showActive = timerState === "running";
   const showDone = timerState === "done";
 
-  // 1. Core Lifecycle Engine: Initialize MQTT broker listener infrastructure
   useEffect(() => {
     const mqttClient = mqtt.connect(MQTT_HOST, MQTT_OPTIONS);
 
     mqttClient.on("connect", () => {
-      console.log("🟢 Connected to HiveMQ Cloud!");
       setConnected(true);
       mqttClient.subscribe(TOPIC);
     });
@@ -89,7 +83,6 @@ const Manual = () => {
       if (topic !== TOPIC) return;
       const message = msg.toString();
 
-      // State Feedback Matrix Sync
       if (message === "on") {
         setIsOn(true);
       } else if (message === "off") {
@@ -98,7 +91,6 @@ const Manual = () => {
         const value = parseInt(message.substring(11), 10);
         if (!isNaN(value)) setBrightness(value);
       }
-      // Backwards Evaluation Sync for State Restoration Updates
       else if (message === "status:on") {
         setIsOn(true);
         setMotionEnabled(false);
@@ -129,9 +121,9 @@ const Manual = () => {
       }
     });
 
-    mqttClient.on("error", (err) => {
-      console.error("MQTT Connection Exception:", err);
-    });
+    // mqttClient.on("error", (err) => {
+    //   console.error("MQTT Connection Exception:", err);
+    // });
 
     setClient(mqttClient);
 
@@ -173,7 +165,6 @@ const Manual = () => {
 
     const avg = sum / step;
 
-    // 🔥 fixes “stuck middle”
     return (avg / max) * 255;
   });
 
@@ -191,7 +182,6 @@ useEffect(() => {
   }
 }, [musicEnabled]);
 
-  // 2. Sync Color Pipeline via MQTT Payloads
   useEffect(() => {
     if (!isOn || !client || !connected) return;
 
@@ -203,7 +193,6 @@ useEffect(() => {
     return () => clearTimeout(timeout);
   }, [color, isOn, client, connected]);
 
-  // Timer Countdown Logic
   useEffect(() => {
     if (timerState !== "running" || countdown === null || timerPaused) return;
 
@@ -222,13 +211,11 @@ useEffect(() => {
     return () => clearInterval(interval);
   }, [timerState, timerPaused]);
 
-  // 3. Refactored Hardware Link Actions (Optimized for MQTT)
   const toggleLED = () => {
     if (!client || !connected) return;
     const nextState = !isOn;
     setIsOn(nextState);
 
-    // Turn off complementary peripheral operations if forcing manual overrides
     if (nextState) {
       setMotionEnabled(false);
       setMusicEnabled(false);
@@ -351,7 +338,6 @@ useEffect(() => {
   const isTimerActive = showActive || showDone;
   const isAlarmActive = !!savedAlarm;
 
-  // Modernized System Validation Constraints (LED on OR Motion on OR Music on)
   const showButtons = !isTimerActive && !isAlarmActive ;
 
   return (
@@ -453,7 +439,6 @@ useEffect(() => {
           />
         )}
 
-        {/* Updated Grid Selection Layout Guardrails */}
         <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 ${!connected ? "pointer-events-none opacity-50" : ""}`}>
           <SensorToggleCard
             icon={Activity}
@@ -480,7 +465,6 @@ useEffect(() => {
           />
         </div>
 
-        {/* Automated Task Trigger Configuration Blocks */}
         <div className="w-full flex justify-center pt-2">
           {showButtons ? (
             <div className="flex gap-4 w-full">
@@ -502,7 +486,7 @@ useEffect(() => {
           ) : (
             !isTimerActive && !isAlarmActive && (
               <p className="text-xs text-center text-slate-400/70 border border-white/5 bg-white/[0.02] p-3 rounded-xl w-full">
-                💡 Turn on the LED or enable a sensor context to configure scheduled Timers and Alarms.
+                 Turn on the LED or enable a sensor context to configure scheduled Timers and Alarms.
               </p>
             )
           )}
