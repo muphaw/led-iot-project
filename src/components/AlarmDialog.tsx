@@ -186,7 +186,7 @@ export default function AlarmDialog({
         {isLedOn && (
           <>
             {/* TOGGLE */}
-            <div className="">
+            <div className="flex items-center gap-4">
               <span>To make led:</span>
 
               <button
@@ -236,7 +236,7 @@ export default function AlarmDialog({
 
               {/* PRESETS */}
               <div className="flex gap-2 flex-wrap justify-center sm:justify-start">
-                {defaultColors.map((c) => (
+                {["#ff0000", "#ffff00", "#00ff00", "#0000ff", "#ffffff"].map((c) => (
                   <button
                     key={c}
                     type="button"

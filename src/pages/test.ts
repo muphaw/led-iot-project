@@ -57,19 +57,20 @@
 // unsigned long sunsetStartTime = 0;
 // unsigned long sunsetDuration = 30000;
 
-// // ================= POMODORO TIMER ENGINE =================
+// // ================= TIMERS & ALARMS CONTROL BLOCKS =================
 // bool timerActive = false;
 // bool timerPaused = false;
+// bool timerTriggered = false; // Tracks if the alert is actively executing post-countdown
 // unsigned long timerEndTime = 0;
 // unsigned long pausedRemaining = 0;
 // String timerAnimation = "blink";
 // String currentTimerAction = "on"; 
 
-// // ================= ALARM ENGINE =================
 // bool alarmEnabled = false;
-// bool alarmTriggered = false;
+// bool alarmTriggered = false; // Tracks if the alarm is actively executing post-trigger
 // String alarmTime = "";
 // String alarmAnimation = "blink";
+// String currentAlarmAction = "on";
 
 // // Animation status tracking
 // bool animationRunning = false;
@@ -77,19 +78,18 @@
 // unsigned long animationStartTime = 0;
 // uint8_t rainbowHue = 0;
 
-// bool backupMotionEnabled = false;
-// bool backupMusicMode = false;
-
 // int targetR = 255;
 // int targetG = 0;
 // int targetB = 0;
 // String targetAnimation = "blink";
 
-// // Backups for state restoration
+// // Backups for state restoration snapshots
 // int backupR = 255;
 // int backupG = 255;
 // int backupB = 255;
-// bool backupLedState = false; // Tracks if LED was originally ON or OFF
+// bool backupLedState = false; 
+// bool backupMotionEnabled = false;
+// bool backupMusicMode = false;
 
 // // Forward Declarations
 // void setLED(bool state);
@@ -97,6 +97,7 @@
 // void stopTriggerAnimation();
 // void startTriggerAnimation(String animType);
 // void handleWiFiReset();
+// void evaluateSystemState();
 
 // // ================= LED CORE FUNCTIONS =================
 // void setLED(bool state) {
@@ -124,7 +125,6 @@
 //   animationRunning = true;
 //   activeAnimationType = animType;
 //   animationStartTime = millis();
-//   ledState = true;
 // }
 
 // void stopTriggerAnimation() {
@@ -153,7 +153,7 @@
 
 //     if (progress >= 1.0) {
 //       animationRunning = false;
-//       setLED(true); // 🟢 ADDED: Lock the hardware state to true when the fade finishes!
+//       setLED(true); 
 //     }
 //   }
 //   else if (activeAnimationType == "fade_out") {
@@ -207,12 +207,10 @@
 //   if (getLocalTime(&timeinfo)) Serial.println("NTP Time Synced.");
 // }
 
-// // ================= ROBUST ARGUMENT PARSER (FIXED BUG) =================
+// // ================= ROBUST ARGUMENT PARSER =================
 // String getSubArg(String msg, String key) {
-//   // Look for key formatted as a sub-argument (preceded by a comma) to avoid matching "timer:"
 //   int keyIdx = msg.indexOf("," + key + ":");
 //   if (keyIdx == -1) {
-//     // Fallback: Check if the key starts at the absolute beginning of the string
 //     if (msg.startsWith(key + ":")) {
 //       keyIdx = 0;
 //     } else {
@@ -220,7 +218,6 @@
 //     }
 //   }
   
-//   // Calculate index offset based on if we matched a comma or started at index 0
 //   int startIdx = (keyIdx == 0) ? (key.length() + 1) : (keyIdx + key.length() + 2);
 //   int endIdx = msg.indexOf(",", startIdx);
   
@@ -230,9 +227,9 @@
 
 // // ================= AUTOMATED STATE RESTORATION ENGINE =================
 // void evaluateSystemState() {
-//   stopTriggerAnimation(); // Stop any running fade/blink overrides
+//   stopTriggerAnimation();
 
-//   // Revert structural state trackers to their historical values
+//   // Restore previous states
 //   ledState = backupLedState;
 //   motionEnabled = backupMotionEnabled;
 //   musicMode = backupMusicMode;
@@ -240,28 +237,54 @@
 //   currentG = backupG;
 //   currentB = backupB;
 
- 
+//   // Reset flags
+//   timerActive = false;
+//   timerPaused = false;
+//   timerTriggered = false;
+//   alarmEnabled = false;
+//   alarmTriggered = false;
 
-//   if (ledState) {
-//     setLED(true);
-//     client.publish(topic, "on");
-//   } 
-//   else if (musicMode) {
-//     fill_solid(leds, NUM_LEDS, CRGB::Black); 
-//     FastLED.show();
-//     // 🟢 TELL REACT: Music mode is now actively running
-//     client.publish(topic, "status:music"); 
-//   } 
+//   FastLED.setBrightness(map(manualBrightness, 0, 100, 10, 255));
+
+//   // ===== FIXED SENSOR RESTORE =====
+//   if (musicMode) {
+
+//     // immediately resume music mode
+//     ledState = true;
+//     readAudioFFT();
+//     client.publish(topic, "status:music");
+//   }
+
 //   else if (motionEnabled) {
-//     fill_solid(leds, NUM_LEDS, CRGB::Black);
-//     FastLED.show();
-//     // 🟢 TELL REACT: Motion sensor is now actively running
+
+//     // immediately re-check PIR state
+//     motionState = digitalRead(PIR_PIN);
+
+//     if (motionState == HIGH) {
+//       lastMotionTime = millis();
+//       setLED(true);
+//     } else {
+//       setLED(false);
+//     }
+
 //     client.publish(topic, "status:motion");
 //   }
+
+//   else if (ledState) {
+
+//     // restore static color mode
+//     for (int i = 0; i < NUM_LEDS; i++) {
+//       leds[i] = CRGB(currentR, currentG, currentB);
+//     }
+
+//     FastLED.show();
+//     client.publish(topic, "status:on");
+//   }
+
 //   else {
+
 //     fill_solid(leds, NUM_LEDS, CRGB::Black);
 //     FastLED.show();
-//     // 🟢 TELL REACT: Everything is turned off
 //     client.publish(topic, "status:idle");
 //   }
 // }
@@ -274,23 +297,22 @@
 //   }
 //   Serial.println("📥 MQTT Payload Received: " + message);
 
-//   // 1. Manual State Switches (With Protection Guard)
+//   bool overrideActive = timerTriggered || alarmTriggered;
+
 //   if (message == "on") {
-//     if (!timerActive) {
+//     if (!overrideActive) {
 //       stopTriggerAnimation();
 //       setLED(true);
 //     }
 //   } 
 //   else if (message == "off") {
-//     if (!timerActive) {
+//     if (!overrideActive) {
 //       stopTriggerAnimation();
 //       setLED(false);
 //     }
 //   }
-  
-//   // 2. Manual Color Update Matrix (With Protection Guard)
 //   else if (message.startsWith("color:")) {
-//     if (!timerActive) {
+//     if (!overrideActive) {
 //       String data = message.substring(6);
 //       int firstComma = data.indexOf(',');
 //       int secondComma = data.indexOf(',', firstComma + 1);
@@ -302,23 +324,19 @@
 //       }
 //     }
 //   }
-  
-//   // 3. Manual Brightness Processing (With Protection Guard)
 //   else if (message.startsWith("brightness:")) {
-//     if (!timerActive) {
+//     if (!overrideActive) {
 //       manualBrightness = constrain(message.substring(11).toInt(), 0, 100);
 //       FastLED.setBrightness(map(manualBrightness, 0, 100, 10, 255));
 //       FastLED.show();
 //     }
 //   }
+//   else if (message == "motion:on")   { if (!overrideActive) motionEnabled = true; }
+//   else if (message == "motion:off")  { if (!overrideActive) motionEnabled = false; }
+//   else if (message == "music:on")    { if (!overrideActive) musicMode = true; }
+//   else if (message == "music:off")   { if (!overrideActive) { musicMode = false; setLED(false); } }
 
-//   // 4. Automation & Acoustic Sensors
-//   else if (message == "motion:on")   { motionEnabled = true; }
-//   else if (message == "motion:off")  { motionEnabled = false; }
-//   else if (message == "music:on")    { musicMode = true; }
-//   else if (message == "music:off")   { musicMode = false; setLED(false); }
-
-//   // 5. Pomodoro Timer Execution Block
+//   // ================= POMODORO TIMER EXECUTION BLOCK =================
 //   else if (message.startsWith("timer:start")) {
 //     long totalSeconds = getSubArg(message, "s").toInt();
 //     if (totalSeconds <= 0) return;
@@ -326,8 +344,10 @@
 //     currentTimerAction = getSubArg(message, "action");
 //     if (currentTimerAction == "") currentTimerAction = "on";
 
-//     // CRITICAL FIX: Always backup state and current colors
+//     // 📸 PERSIST SYSTEM SNAPSHOT
 //     backupLedState = ledState;
+//     backupMotionEnabled = motionEnabled;
+//     backupMusicMode = musicMode;
 //     backupR = currentR; 
 //     backupG = currentG; 
 //     backupB = currentB;
@@ -345,20 +365,14 @@
 //     timerEndTime = millis() + (totalSeconds * 1000UL);
 //     timerActive = true;
 //     timerPaused = false;
+//     timerTriggered = false;
 //     pausedRemaining = 0;
-    
-//     stopTriggerAnimation(); 
-
-//     if (currentTimerAction == "off") {
-//       sunsetDuration = totalSeconds * 1000UL; 
-//       startTriggerAnimation("fade_out");
-//     }
 //   }
 //   else if (message == "timer:pause") {
 //     if (timerActive && !timerPaused) {
 //       pausedRemaining = timerEndTime - millis();
 //       timerPaused = true;
-//       if (currentTimerAction == "off") animationRunning = false;
+//       if (timerTriggered && currentTimerAction == "off") animationRunning = false;
 //     }
 //   }
 //   else if (message.startsWith("timer:resume")) {
@@ -370,7 +384,7 @@
 //       timerEndTime = millis() + pausedRemaining;
 //       timerPaused = false;
 
-//       if (currentTimerAction == "off") {
+//       if (timerTriggered && currentTimerAction == "off") {
 //         sunsetDuration = pausedRemaining; 
 //         animationStartTime = millis();    
 //         animationRunning = true;
@@ -378,56 +392,40 @@
 //     }
 //   }
 //   else if (message == "timer:cancel") {
-//     timerActive = false; 
-//     timerPaused = false; 
-//     pausedRemaining = 0;
-//     stopTriggerAnimation();
-//     evaluateSystemState();
-    
-//     // Restore exact values and the original ON/OFF state
-//     // currentR = backupR; 
-//     // currentG = backupG; 
-//     // currentB = backupB;
-//     // setLED(backupLedState); 
+//     evaluateSystemState(); 
 //   }
 
-//   // 6. Alarm Scheduling Matrix (FIXED ORDER)
+//   // ================= ALARM SCHEDULING MATRIX =================
 //   else if (message == "alarm:off") {
-//     alarmTriggered = false; 
-//     alarmEnabled = false;
-//     stopTriggerAnimation();
-//     evaluateSystemState();
-
-//     // motionEnabled = true; 
-//     // musicMode = false;
-    
-//     // Restore exact values and original ON/OFF state
-//     currentR = backupR; 
-//     currentG = backupG; 
-//     currentB = backupB;
-//     setLED(backupLedState);
+//     evaluateSystemState(); 
 //   }
 //   else if (message.startsWith("alarm:")) {
 //     alarmTime = getSubArg(message, "time");
-//     String action = getSubArg(message, "action");
+//     currentAlarmAction = getSubArg(message, "action");
+//     if (currentAlarmAction == "") currentAlarmAction = "on";
 
-//     // CRITICAL FIX: Always backup state and current colors
+//     // 📸 PERSIST SYSTEM SNAPSHOT
 //     backupLedState = ledState;
+//     backupMotionEnabled = motionEnabled;
+//     backupMusicMode = musicMode;
 //     backupR = currentR; 
 //     backupG = currentG; 
 //     backupB = currentB;
 
-//     targetR = getSubArg(message, "r").toInt();
-//     targetG = getSubArg(message, "g").toInt();
-//     targetB = getSubArg(message, "b").toInt();
+//     String rVal = getSubArg(message, "r");
+//     String gVal = getSubArg(message, "g");
+//     String bVal = getSubArg(message, "b");
+//     if (rVal != "") targetR = rVal.toInt();
+//     if (gVal != "") targetG = gVal.toInt();
+//     if (bVal != "") targetB = bVal.toInt();
     
-//     if (action == "off") {
+//     alarmAnimation = getSubArg(message, "anim");
+//     if (alarmAnimation == "") alarmAnimation = "blink";
+    
+//     if (currentAlarmAction == "off") {
 //       alarmAnimation = "fade_out";
 //       sunsetDuration = 10000; 
-//     } else {
-//       alarmAnimation = getSubArg(message, "anim");
-//       if (alarmAnimation == "") alarmAnimation = "fade";
-//     }
+//     } 
     
 //     alarmEnabled = true;
 //     alarmTriggered = false;
@@ -467,29 +465,29 @@
 //   if (alarmTime == String(currentFormatted)) {
 //     if (!alarmTriggered) {
 //       Serial.println("ALARM TIME MATCHED ✅");
-      
-//       // Save state and colors
-//       backupLedState = ledState;
-//       backupR = currentR; 
-//       backupG = currentG; 
-//       backupB = currentB;
-      
 //       alarmTriggered = true;
+      
+//       // Isolate peripheral behaviors immediately
+//       motionEnabled = false;
+//       musicMode = false;
 
-//       if (alarmAnimation == "fade_out") {
+//       if (currentAlarmAction == "off") {
 //         stopTriggerAnimation();
-//         startTriggerAnimation("fade_out");
+//   alarmAnimation = "fade_out";
+//   sunsetDuration = 10000;
+//   setLED(false);
 //       } else {
-//         // Move target alarm colors to active register channels
 //         currentR = targetR; 
 //         currentG = targetG; 
 //         currentB = targetB;
         
 //         stopTriggerAnimation();
-//         ledState = true; // Turn power state ON to show animation
-//         musicMode = false;
-//         setColor(currentR, currentG, currentB);
-//         delay(5); 
+//         ledState = true; 
+        
+//         // Force initial frame to avoid flash delay
+//         for (int i = 0; i < NUM_LEDS; i++) leds[i] = CRGB(currentR, currentG, currentB);
+//         FastLED.show();
+        
 //         startTriggerAnimation(alarmAnimation);
 //         if (alarmAnimation == "" || alarmAnimation == "none") setLED(true);
 //       }
@@ -557,56 +555,75 @@
 //   syncTime();
 // }
 
-// // ================= PERIODIC LOOP LOOP LOOP =================
+// // ================= PERIODIC MAIN LOOP =================
 // void loop() {
 //   if (!client.connected()) {
 //     reconnect();
 //   }
 //   client.loop();
   
+//   // 1. Run Override Animation Engines (Blinks/Fades)
 //   if (animationRunning && !timerPaused) {
 //     runActiveAnimation();
 //   }
 
+//   // 2. Physical WiFi Reset Trigger check
 //   if (digitalRead(TRIGGER_PIN) == LOW) {
 //     delay(50);
 //     if (digitalRead(TRIGGER_PIN) == LOW) handleWiFiReset();
 //   }
 
-//   if (musicMode && !animationRunning) {
-//     readAudioFFT();
-//   } 
-//   else if (motionEnabled && !animationRunning ) { // Added !timerActive here to protect the timer from motion triggers
-//     motionState = digitalRead(PIR_PIN);
-//     if (motionState == HIGH) { 
-//       lastMotionTime = millis(); 
-//       setLED(true); 
-//     }
-//     if (millis() - lastMotionTime > holdTime) {
-//       setLED(false);
-//     }
-//   }
+//   // 3. Sensor Execution Block (CLEANED UP & ISOLATED)
+//   bool processingOverrideAlert = timerTriggered || alarmTriggered;
 
-//   if (timerActive && !timerPaused) {
-//     if (millis() >= timerEndTime) {
-//       timerActive = false; pausedRemaining = 0;
-//       motionEnabled = false;
-//       if (currentTimerAction == "off") {
-//         stopTriggerAnimation(); setLED(false);
-//       } else {
-//         currentR = targetR; currentG = targetG; currentB = targetB;
-//         timerAnimation = targetAnimation;
-//         ledState = true; // Turn state ON so setColor runs properly
-//         setColor(currentR, currentG, currentB);
-//         startTriggerAnimation(timerAnimation);
+//   if (!processingOverrideAlert && !animationRunning) {
+//     if (musicMode) {
+//       readAudioFFT();
+//     } 
+//     else if (motionEnabled) { 
+//       motionState = digitalRead(PIR_PIN);
+//       if (motionState == HIGH) { 
+//         lastMotionTime = millis(); 
+//         setLED(true); 
+//       }
+//       if (millis() - lastMotionTime > holdTime) {
+//         setLED(false);
 //       }
 //     }
 //   }
 
+//   // 4. Countdown Timer Expiration Check Loop
+//   if (timerActive && !timerPaused && !timerTriggered) {
+//     if (millis() >= timerEndTime) {
+//       timerTriggered = true;
+      
+//       // Cut off sensors so they don't break the blue target frames
+//       motionEnabled = false;
+//       musicMode = false;
+
+//       if (currentTimerAction == "off") {
+//         stopTriggerAnimation(); 
+//          timerAnimation = "fade_out";
+//         sunsetDuration = 10000;
+//         setLED(false);
+//       } else {
+//         currentR = targetR; currentG = targetG; currentB = targetB;
+//         timerAnimation = targetAnimation;
+//         stopTriggerAnimation();
+//         ledState = true; 
+        
+//         // Force frame array values directly before beginning render cycle
+//         for (int i = 0; i < NUM_LEDS; i++) leds[i] = CRGB(currentR, currentG, currentB);
+//         FastLED.show();
+        
+//         startTriggerAnimation(timerAnimation);
+//       }
+//     } 
+//   }
+
+//   // 5. Alarm Time Validation Engine Loop
 //   if (alarmEnabled && !alarmTriggered) {
 //     struct tm timeinfo;
 //     if (getLocalTime(&timeinfo)) checkAlarmTime(&timeinfo);
 //   }
-
-  
 // }

@@ -195,7 +195,7 @@ export default function TimerDialog({
         {isLedOn && (
           <>
             {/* TOGGLE */}
-            <div className="">
+            <div className="flex gap-4 items-center">
               <span>To make led:</span>
 
               <button
@@ -205,6 +205,7 @@ export default function TimerDialog({
                 }`}
               >
                 {timerLedAction ? "ON" : "OFF"}
+                
               </button>
             </div>
           </>

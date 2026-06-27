@@ -64,6 +64,13 @@ const Manual = () => {
   const [timerDialogOpen, setTimerDialogOpen] = useState(false);
   const [timerAnimation, setTimerAnimation] = useState<AlarmAnimation>("fade");
 
+  const [alarmAnimation, setAlarmAnimation] = useState<AlarmAnimation>("fade");
+  const [alarmDialogOpen, setAlarmDialogOpen] = useState(false);
+  const [alarmLedAction, setAlarmLedAction] = useState(true);
+  const [savedAlarm, setSavedAlarm] = useState<SavedAlarm | null>(null);
+
+  const [audioLevels, setAudioLevels] = useState<number[]>([]);
+
   const showIdle = timerState === "idle";
   const showActive = timerState === "running";
   const showDone = timerState === "done";
@@ -91,21 +98,34 @@ const Manual = () => {
         const value = parseInt(message.substring(11), 10);
         if (!isNaN(value)) setBrightness(value);
       }
-
+      // Backwards Evaluation Sync for State Restoration Updates
+      else if (message === "status:on") {
+        setIsOn(true);
+        setMotionEnabled(false);
+        setMusicEnabled(false);
+        setTimerState("idle");
+        setCountdown(null);
+      }
       else if (message === "status:music") {
         setMusicEnabled(true);
         setMotionEnabled(false);
         setIsOn(false);
+        setTimerState("idle");
+        setCountdown(null);
       }
       else if (message === "status:motion") {
         setMotionEnabled(true);
         setMusicEnabled(false);
         setIsOn(false);
+        setTimerState("idle");
+        setCountdown(null);
       }
       else if (message === "status:idle") {
         setMotionEnabled(false);
         setMusicEnabled(false);
         setIsOn(false);
+        setTimerState("idle");
+        setCountdown(null);
       }
     });
 
@@ -119,6 +139,57 @@ const Manual = () => {
       mqttClient.end();
     };
   }, []);
+
+  const startVisualizer = async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+  });
+
+  const audioContext = new AudioContext();
+
+  const analyser = audioContext.createAnalyser();
+  analyser.fftSize = 64;
+
+  const source = audioContext.createMediaStreamSource(stream);
+  source.connect(analyser);
+
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+
+  const update = () => {
+  analyser.getByteFrequencyData(dataArray);
+
+  const bars = 10;
+  const step = Math.floor(dataArray.length / bars);
+
+  const max = Math.max(...dataArray, 1);
+
+  const newLevels = Array.from({ length: bars }, (_, i) => {
+    let sum = 0;
+
+    for (let j = 0; j < step; j++) {
+      sum += dataArray[i * step + j];
+    }
+
+    const avg = sum / step;
+
+    // 🔥 fixes “stuck middle”
+    return (avg / max) * 255;
+  });
+
+  setAudioLevels(newLevels);
+
+  requestAnimationFrame(update);
+};
+
+  update();
+};
+
+useEffect(() => {
+  if (musicEnabled) {
+    startVisualizer();
+  }
+}, [musicEnabled]);
 
   // 2. Sync Color Pipeline via MQTT Payloads
   useEffect(() => {
@@ -157,6 +228,12 @@ const Manual = () => {
     const nextState = !isOn;
     setIsOn(nextState);
 
+    // Turn off complementary peripheral operations if forcing manual overrides
+    if (nextState) {
+      setMotionEnabled(false);
+      setMusicEnabled(false);
+    }
+
     const payload = nextState ? "on" : "off";
     client.publish(TOPIC, payload, { qos: 1, retain: true });
   };
@@ -171,6 +248,10 @@ const Manual = () => {
     if (!client || !connected) return;
     const newState = !motionEnabled;
     setMotionEnabled(newState);
+    if (newState) {
+      setMusicEnabled(false);
+      setIsOn(false);
+    }
     client.publish(TOPIC, `motion:${newState ? "on" : "off"}`, { qos: 1 });
   };
 
@@ -178,6 +259,10 @@ const Manual = () => {
     if (!client || !connected) return;
     const newState = !musicEnabled;
     setMusicEnabled(newState);
+    if (newState) {
+      setMotionEnabled(false);
+      setIsOn(false);
+    }
     client.publish(TOPIC, newState ? "music:on" : "music:off", { qos: 1 });
   };
 
@@ -185,10 +270,12 @@ const Manual = () => {
     if (!client || !connected) return;
     const time = formatAlarm(hour, minute, period);
     const { r, g, b } = hexToRgb(scheduledColor);
-    const actionParam = alarmLedAction ? "on" : "off";
+    const actionParam = isOn
+  ? (alarmLedAction ? "on" : "off")
+  : "on";
 
     const payload = `alarm:set,time:${time},action:${actionParam},r:${r},g:${g},b:${b},anim:${alarmAnimation}`;
-  client.publish(TOPIC, payload, { qos: 1 });
+    client.publish(TOPIC, payload, { qos: 1 });
 
     setSavedAlarm({
       hour,
@@ -215,7 +302,9 @@ const Manual = () => {
     if (totalSeconds <= 0) return;
 
     const { r, g, b } = hexToRgb(timerColor);
-    const actionParam = timerLedAction ? "on" : "off";
+    const actionParam = isOn
+  ? (timerLedAction ? "on" : "off")
+  : "on";
 
     const payload = `timer:start,s:${totalSeconds},action:${actionParam},r:${r},g:${g},b:${b},anim:${timerAnimation}`;
     client.publish(TOPIC, payload, { qos: 1 });
@@ -258,15 +347,12 @@ const Manual = () => {
     setAlarmDialogOpen(true);
   };
 
-  const [alarmAnimation, setAlarmAnimation] = useState<AlarmAnimation>("fade");
-  const [alarmDialogOpen, setAlarmDialogOpen] = useState(false);
-  const [alarmLedAction, setAlarmLedAction] = useState(true);
-  const [savedAlarm, setSavedAlarm] = useState<SavedAlarm | null>(null);
-
   const progress = totalDuration > 0 && countdown !== null ? ((totalDuration - countdown) / totalDuration) * 100 : 0;
   const isTimerActive = showActive || showDone;
   const isAlarmActive = !!savedAlarm;
-  const showButtons = !isTimerActive && !isAlarmActive;
+
+  // Modernized System Validation Constraints (LED on OR Motion on OR Music on)
+  const showButtons = !isTimerActive && !isAlarmActive ;
 
   return (
     <div className="w-full bg-[#0b0f19] text-slate-100 flex items-center justify-center">
@@ -276,7 +362,7 @@ const Manual = () => {
           <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-md border ${
             connected ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"
           }`}>
-            Broker: {connected ? "Connected" : "Linking..."}
+            {connected ? "Connected" : "Linking..."}
           </span>
         </div>
 
@@ -284,43 +370,73 @@ const Manual = () => {
           <ActiveAlarmCard savedAlarm={savedAlarm} setAlarmDialogOpen={setAlarmDialogOpen} offAlarm={offAlarm} />
         ) : showIdle ? (
           <>
-            <div className="flex w-full h-full items-stretch">
-              <div className="w-3/4 flex items-center justify-center">
-                <AdvancedLEDBulb isOn={isOn} brightness={brightness} color={color} />
-              </div>
-              <ColorPickerPanel color={color} setColor={setColor} defaultColors={defaultColors} />
-            </div>
+  {musicEnabled ? (
+    <div className="w-full h-[320px] rounded-3xl bg-gradient-to-b from-cyan-500/10 to-blue-500/5 border border-cyan-400/10 flex items-center justify-center overflow-hidden">
+      
+      <div className="flex items-end justify-center gap-1 h-48 w-full px-6">
+        {audioLevels.map((level, i) => (
+          <div
+            key={i}
+            className="w-9 rounded-full bg-cyan-400 transition-all duration-75 shadow-[0_0_12px_rgba(34,211,238,0.8)]"
+            style={{
+  height: `${Math.max(Math.pow(level / 255, 1.6) * 100, 6)}%`,
+}}
+          />
+        ))}
+      </div>
 
-            <div className={`flex justify-center ${!connected || musicEnabled || motionEnabled ? "pointer-events-none opacity-50" : ""}`}>
-              <button
-                onClick={toggleLED}
-                disabled={!connected || musicEnabled || motionEnabled}
-                className={`w-full py-2 rounded-2xl font-bold text-sm uppercase flex items-center justify-center gap-3 transition-all duration-300 shadow-lg border ${
-                  isOn
-                    ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-neutral-950 border-transparent shadow-emerald-500/20"
-                    : "bg-white/5 border-white/10 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 shadow-none"
-                }`}
-              >
-                <Power className="w-4 h-4" />
-                {isOn ? "Turn Off" : "Turn On"}
-              </button>
-            </div>
+    </div>
+  ) : (
+    <>
+      <div className="flex w-full h-full items-stretch">
+        <div className="w-3/4 flex items-center justify-center">
+          <AdvancedLEDBulb
+            isOn={isOn}
+            brightness={brightness}
+            color={color}
+          />
+        </div>
 
-            <div className={`bg-white/5 border border-white/5 py-2 px-4 rounded-2xl ${!connected && "opacity-40 pointer-events-none"}`}>
-              <div className="flex justify-between text-xs font-bold text-gray-400">
-                <span className="flex items-center gap-2">Brightness</span>
-                <span className="text-white">{brightness}%</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={brightness}
-                onChange={(e) => updateBrightness(Number(e.target.value))}
-                className="w-full accent-cyan-400 h-1 bg-neutral-900 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
-          </>
+        <ColorPickerPanel
+          color={color}
+          setColor={setColor}
+          defaultColors={defaultColors}
+        />
+      </div>
+
+      <div className={`flex justify-center ${!connected || motionEnabled ? "pointer-events-none opacity-50" : ""}`}>
+        <button
+          onClick={toggleLED}
+          disabled={!connected || motionEnabled}
+          className={`w-full py-2 rounded-2xl font-bold text-sm uppercase flex items-center justify-center gap-3 transition-all duration-300 shadow-lg border ${
+            isOn
+              ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-neutral-950 border-transparent shadow-emerald-500/20"
+              : "bg-white/5 border-white/10 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 shadow-none"
+          }`}
+        >
+          <Power className="w-4 h-4" />
+          {isOn ? "Turn Off" : "Turn On"}
+        </button>
+      </div>
+
+      <div className={`bg-white/5 border border-white/5 py-2 px-4 rounded-2xl ${(!connected || (!isOn && !motionEnabled)) && "opacity-40 pointer-events-none"}`}>
+        <div className="flex justify-between text-xs font-bold text-gray-400">
+          <span>Brightness</span>
+          <span className="text-white">{brightness}%</span>
+        </div>
+
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={brightness}
+          onChange={(e) => updateBrightness(Number(e.target.value))}
+          className="w-full accent-cyan-400 h-1 bg-neutral-900 rounded-lg appearance-none cursor-pointer"
+        />
+      </div>
+    </>
+  )}
+</>
         ) : (
           <CircularTimer
             showActive={showActive}
@@ -337,14 +453,15 @@ const Manual = () => {
           />
         )}
 
-        <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2 ${(!connected || isOn) ? "pointer-events-none opacity-50" : ""}`}>
+        {/* Updated Grid Selection Layout Guardrails */}
+        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 ${!connected ? "pointer-events-none opacity-50" : ""}`}>
           <SensorToggleCard
             icon={Activity}
             iconColorClass="text-green-400"
             title="Motion Sensor"
             enabled={motionEnabled}
             onToggle={toggleMotionSensor}
-            disabled={!connected || musicEnabled || isOn}
+            disabled={!connected || musicEnabled || isTimerActive || isAlarmActive || isOn}
             activeText="Motion sensor active: LED will respond to movement automatically."
             inactiveText="Enable motion detection to allow automatic lighting control."
             themeColorClass="green"
@@ -356,26 +473,39 @@ const Manual = () => {
             title="Acoustic Sensor"
             enabled={musicEnabled}
             onToggle={toggleMusicSensor}
-            disabled={!connected || motionEnabled || isOn}
+            disabled={!connected || motionEnabled || isTimerActive || isAlarmActive || isOn}
             activeText="Active: Device state flips on physical acoustic spikes."
             inactiveText="Toggle matrix power loop via audio spikes."
             themeColorClass="blue"
           />
         </div>
 
-        <div>
-          <div className="flex gap-2">
-            {showButtons && (
-              <button onClick={() => setTimerDialogOpen(true)} disabled={!connected} className="px-4 py-2 rounded-xl bg-emerald-500 text-black disabled:opacity-40">
+        {/* Automated Task Trigger Configuration Blocks */}
+        <div className="w-full flex justify-center pt-2">
+          {showButtons ? (
+            <div className="flex gap-4 w-full">
+              <button 
+                onClick={() => setTimerDialogOpen(true)} 
+                disabled={!connected } 
+                className="flex-1 py-3 px-4 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-black disabled:opacity-40 transition-all shadow-md shadow-emerald-500/10"
+              >
                 Set Timer
               </button>
-            )}
-            {showButtons && (
-              <button onClick={openAlarmDialog} disabled={!connected} className="px-4 py-2 rounded-xl bg-emerald-500 text-black disabled:opacity-40">
+              <button 
+                onClick={openAlarmDialog} 
+                disabled={!connected} 
+                className="flex-1 py-3 px-4 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-black disabled:opacity-40 transition-all shadow-md shadow-emerald-500/10"
+              >
                 Set Alarm
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            !isTimerActive && !isAlarmActive && (
+              <p className="text-xs text-center text-slate-400/70 border border-white/5 bg-white/[0.02] p-3 rounded-xl w-full">
+                💡 Turn on the LED or enable a sensor context to configure scheduled Timers and Alarms.
+              </p>
+            )
+          )}
 
           <TimerDialog
             open={timerDialogOpen}
