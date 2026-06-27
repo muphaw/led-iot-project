@@ -69,7 +69,6 @@ export default function AlarmDialog({
   hours,
   minutes,
 
-  defaultColors,
   animationOptions,
 }: Props) {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
