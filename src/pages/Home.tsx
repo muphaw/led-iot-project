@@ -476,7 +476,7 @@ const Manual = () => {
           <SensorToggleCard
             icon={Volume2}
             iconColorClass="text-blue-400"
-            title="Acoustic Sensor"
+            title="Sound Sensor"
             enabled={musicEnabled}
             onToggle={toggleMusicSensor}
             disabled={
@@ -486,7 +486,7 @@ const Manual = () => {
               isAlarmActive ||
               isOn
             }
-            activeText="Active: Device state flips on physical acoustic spikes."
+            activeText="Active: The device turns on when it detects strong acoustic spikes."
             inactiveText="Toggle matrix power loop via audio spikes."
             themeColorClass="blue"
           />

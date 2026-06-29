@@ -64,7 +64,7 @@ const ActiveAlarmCard: React.FC<ActiveAlarmCardProps> = ({
           onClick={offAlarm}
           className="flex-1 py-3 rounded-2xl bg-red-500/10 text-red-400 font-medium hover:bg-red-500/20 transition"
         >
-          Remove
+          Cancel
         </button>
       </div>
     </div>
