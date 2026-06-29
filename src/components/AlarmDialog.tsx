@@ -90,7 +90,6 @@ export default function AlarmDialog({
           rounded-2xl
         "
       >
-        {/* HEADER */}
         <DialogHeader>
           <DialogTitle className="text-lg sm:text-xl font-semibold">
             Set Alarm
@@ -101,7 +100,6 @@ export default function AlarmDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* ================= TIME PICKER ================= */}
         <div className="relative rounded-2xl bg-black/30 border border-white/10 overflow-hidden ">
           <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 z-10 flex">
             <div className="w-1/3 flex justify-end pr-4">
@@ -123,7 +121,6 @@ export default function AlarmDialog({
             height={isMobile ? 160 : 200}
             itemHeight={isMobile ? 40 : 52}
           >
-            {/* HOURS */}
             <Picker.Column name="hour">
               {hours.map((h) => (
                 <Picker.Item key={h} value={h}>
@@ -142,7 +139,6 @@ export default function AlarmDialog({
               ))}
             </Picker.Column>
 
-            {/* MINUTES */}
             <Picker.Column name="minute">
               {minutes.map((m) => (
                 <Picker.Item key={m} value={m}>
@@ -161,7 +157,6 @@ export default function AlarmDialog({
               ))}
             </Picker.Column>
 
-            {/* PERIOD */}
             <Picker.Column name="period">
               {["AM", "PM"].map((p) => (
                 <Picker.Item key={p} value={p}>
@@ -184,7 +179,6 @@ export default function AlarmDialog({
 
         {isLedOn && (
           <>
-            {/* TOGGLE */}
             <div className="flex items-center gap-4">
               <span>To make led:</span>
 
@@ -199,10 +193,8 @@ export default function AlarmDialog({
             </div>
           </>
         )}
-        {/* ONLY SHOW WHEN alarmLedAction = true */}
         {showColorAndAnimation && (
           <>
-            {/* COLOR */}
             <div className="mt-2 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] sm:text-xs uppercase text-gray-400">
@@ -233,21 +225,22 @@ export default function AlarmDialog({
                 </div>
               </label>
 
-              {/* PRESETS */}
-              <div className="flex gap-2 flex-wrap justify-center sm:justify-start">
-                {["#ff0000", "#ffff00", "#00ff00", "#0000ff", "#ffffff"].map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setScheduledColor(c)}
-                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full border transition-all ${
-                      scheduledColor === c
-                        ? "ring-2 ring-white scale-110"
-                        : "border-white/10"
-                    }`}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
+              <div className="flex gap-2 flex-wrap justify-center">
+                {["#ff0000", "#ffff00", "#00ff00", "#0000ff", "#ffffff"].map(
+                  (c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setScheduledColor(c)}
+                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full border transition-all ${
+                        scheduledColor === c
+                          ? "ring-2 ring-white scale-110"
+                          : "border-white/10"
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ),
+                )}
               </div>
             </div>
 
@@ -276,7 +269,6 @@ export default function AlarmDialog({
             </div>
           </>
         )}
-        {/* ================= FOOTER ================= */}
         <DialogFooter className="mt-2 flex flex-col-reverse sm:flex-row gap-2">
           <DialogClose asChild>
             <button className="w-full sm:w-auto px-3 py-2 rounded-xl bg-white/10 text-sm">
