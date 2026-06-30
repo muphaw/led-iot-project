@@ -441,6 +441,7 @@ const Manual = () => {
             showActive={showActive}
             showDone={showDone}
             timerColor={timerColor}
+            timerAnimation={timerAnimation}
             progress={progress}
             countdown={countdown}
             formatTime={formatTime}

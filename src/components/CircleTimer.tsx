@@ -3,6 +3,7 @@ import { useEffect } from "react";
 
 export default function CircularTimer({
   timerColor,
+  timerAnimation,
   progress,
   countdown,
   formatTime,
@@ -12,9 +13,9 @@ export default function CircularTimer({
   resumeTimer,
   cancelTimer,
 }: any) {
-  const size = 205; 
+  const size = 205;
   const center = size / 2;
-  const radius = 90; 
+  const radius = 90;
 
   const circumference = 2 * Math.PI * radius;
 
@@ -95,7 +96,7 @@ export default function CircularTimer({
         </div>
 
         <div className="flex items-center justify-between text-xs text-gray-400">
-          <span>Animation: none</span>
+          <span>Animation: {timerAnimation}</span>
           <span>{timerPaused ? "Paused" : "Running"}</span>
         </div>
 
